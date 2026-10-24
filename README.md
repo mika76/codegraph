@@ -46,6 +46,8 @@ StaffApp
 - **Deterministic and honest.** The same code always gives the same graph. When a name could mean two things the
   link is skipped rather than guessed, so what you see is there.
 
+How does it compare with general tools such as graphify? See [codegraph vs graphify](docs/codegraph-vs-graphify.md).
+
 ## Getting started
 
 You need Windows and the [.NET SDK 10](https://dotnet.microsoft.com/download) or newer. To build the native exe
