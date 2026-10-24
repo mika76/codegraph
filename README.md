@@ -124,11 +124,19 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 | "How does A reach B?" | `codegraph path A B` |
 | Cutting a release | `codegraph release-snapshot 2.5` (then edit `releases.json`) |
 
-### With Claude Code
+### With AI coding agents
 
-`claude-setup\install.ps1` installs three skills into this folder's `.claude`: `/graph-ask` (answer "who uses /
-what breaks" questions from the graph, then check the source), `/graph-build` (rebuild and review the report) and
-`/graph-release` (record releases). `graph.json` is plain JSON, so any other tool or script can read it too.
+This is where codegraph shines: instead of grepping repo by repo, an agent (Claude Code, Cursor, Copilot, Codex,
+...) asks the graph "what breaks if I change X?" and gets every caller and app with `file:line` to check.
+
+- **Claude Code:** `claude-setup\install.ps1` installs three skills: `/graph-ask` (answer "who uses / what breaks"
+  questions from the graph, then check the source), `/graph-build` (rebuild and review the report) and
+  `/graph-release` (record releases).
+- **Any agent:** add a few lines to your workspace's `CLAUDE.md` / `AGENTS.md` telling it to run `show`, `impact`
+  and `path` and verify the results; agents can also read `graph.json` directly.
+
+The [agents guide](docs/agents.md) has the instructions snippet, the permissions to grant, and the `graph.json`
+format.
 
 ## Adding your own knowledge
 
@@ -247,8 +255,10 @@ dotnet test CodeGraph.slnx       # unit tests
 The code is in `src/CodeGraph` (C#, no runtime dependencies, Native AOT). `CLAUDE.md` describes the architecture:
 scanning, the parsers, how references are resolved, and the outputs.
 
-Releases: push a tag like `v0.2.0`; the Release workflow builds the native binaries for all platforms and
-attaches them to a GitHub release. See the [roadmap](docs/ROADMAP.md) for what's planned.
+Releases: add a `## [x.y.z] - date` section to [CHANGELOG.md](CHANGELOG.md) (moving the entries from
+`[Unreleased]`), then push a tag like `v0.2.0`. The Release workflow builds the native binaries for all platforms
+and creates a GitHub release with that changelog section as its notes; it fails if the section is missing.
+See the [roadmap](docs/ROADMAP.md) for what's planned.
 
 ## License
 
