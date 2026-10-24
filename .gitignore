@@ -16,3 +16,7 @@ CLAUDE.local.md
 /codegraph.json
 /releases.json
 /knowledge.json
+
+# macOS metadata files
+._*
+.DS_Store
