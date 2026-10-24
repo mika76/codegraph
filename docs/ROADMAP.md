@@ -25,7 +25,7 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
     parser to improve next.
 - **`packages.config`** (S). Read the NuGet packages and versions of old-style .NET projects and attach them to
   the project in the same folder, so "which apps use library X, and which version?" works for them too.
-- **Your own file formats** (M-L, design open). Many teams have in-house files that tie things together - report
+- **Your own file formats** (M-L, design agreed). Many teams have in-house files that tie things together - report
   definitions that name a report file, its parameters and the procedures behind it; import/export mappings; menu
   or permission definitions. Idea: declarative extractors in `codegraph.json` (file pattern + XPath / JSON path
   rules → nodes and links, with embedded SQL parsed as SQL) so company-specific formats stay in your own config,
@@ -48,6 +48,7 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
   "code general tools can't read". Mainstream languages are already well served by tree-sitter based tools
   (see [codegraph vs graphify](codegraph-vs-graphify.md)).
 - **Export** to other graph tools (GraphML, Neo4j).
+- **More formats for your own extractors** - INI, YAML, CSV, plain text with regex rules - next to XML and JSON.
 
 ## Not planned
 

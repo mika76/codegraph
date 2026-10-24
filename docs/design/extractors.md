@@ -1,6 +1,6 @@
 # Design: extractors for your own file formats
 
-Status: **proposal** - not built yet. Comments welcome.
+Status: **agreed, not built yet** (open questions answered, see the end).
 
 ## Problem
 
@@ -88,16 +88,21 @@ so `impact Orders` lists the report, `show BusinessDay` lists every report that 
 - **Errors**: a file that doesn't match the expected shape is listed in the report under the extractor's name, not
   fatal.
 
-## Open questions
+## Decisions
 
-1. **Linking from code.** UI code often opens a report by name (`ShowReport("Sales by Period")`) or file name.
-   Code parsers already keep string literals; a `"referenced_by": "string"` option could link any code string equal
-   to the node's name (or `uses_file` value) to the node. Precise, but only for exact strings - is that the link
-   that matters most for you?
-2. **One node per file or per element?** Covered by `items`; is there a case where one file holds many reports?
-3. **Other formats**: plain text / INI / CSV rules (regex) - needed, or are XML and JSON enough?
-4. **Escape hatch**: an external command that prints nodes and links as JSON, for formats rules can't describe -
-   later, if needed.
+1. **Linking from code: yes, as an option.** Application reports are source code too, so a screen that opens a
+   report by name or file name (`ShowReport("Sales by Period")`, `"Sales by Period.rpt"`) should link to it.
+   An extractor may set `"referenced_by": ["name", "uses_file"]`: code string literals exactly equal (ignoring
+   case) to the node's name or one of its `uses_file` values become `opens` edges from the routine containing
+   the string. Exact matches only - no guessing from partial strings.
+2. **One node per file** is the normal case (one definition file per report file, e.g. Crystal `.rpt` or
+   DevExpress `.repx`); `items` stays for formats that hold several things per file, defaulting to the root.
+3. **XML and JSON only** for now. Other structured formats (INI, YAML, CSV, plain text with regex rules) are an
+   optional later item on the roadmap.
+4. **No external-command escape hatch** until a format turns up that rules can't describe.
+
+Note: report files that are themselves XML (DevExpress `.repx`) can be read by an extractor of their own (data
+sources, parameters, SQL); binary ones (Crystal `.rpt`) appear as `file_ref` nodes through `uses_file`.
 
 ## Size
 
