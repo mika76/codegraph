@@ -23,6 +23,13 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
   - VB6 late binding: infer an `Object` variable's type from `CreateObject("Lib.Class")` and `Set x = New Class`.
   - A "why didn't this link?" section in the report: the most common unresolved names per kind, to show which
     parser to improve next.
+- **`packages.config`** (S). Read the NuGet packages and versions of old-style .NET projects and attach them to
+  the project in the same folder, so "which apps use library X, and which version?" works for them too.
+- **Your own file formats** (M-L, design open). Many teams have in-house files that tie things together - report
+  definitions that name a report file, its parameters and the procedures behind it; import/export mappings; menu
+  or permission definitions. Idea: declarative extractors in `codegraph.json` (file pattern + XPath / JSON path
+  rules → nodes and links, with embedded SQL parsed as SQL) so company-specific formats stay in your own config,
+  plus an "external command" escape hatch for formats rules can't describe.
 - **Release diff** (M). `codegraph diff 2.3 2.4` (two releases, or two branches/graphs): modules, tables,
   procedures and API routes added, removed or changed. Builds on the release tracking that already exists.
 
