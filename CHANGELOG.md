@@ -10,8 +10,20 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 ## [Unreleased]
 
 ### ✨ Added
+- 🧱 **Extractors for your own file formats**: rules in `codegraph.json` (`extractors`) read in-house XML/JSON files -
+  report definitions, patch lists, mappings - into graph nodes and links. XPath / JSON paths pick the values; links
+  go to existing DB objects, projects, files, symbols or releases, or create nodes; embedded SQL is parsed as T-SQL;
+  `pattern`/`replace` rewrite values (e.g. `353800` → release `35.38.0`). Item notes go to `Items/` in the vault and
+  the report gets a "Your own file formats" section.
+- 🔗 `opens` links from code to extractor items: a string literal naming an item's file (or name) links the routine
+  that contains it (`referenced_by`).
+- 🏷️ Releases can come from your own files (`"to": "release"`), merged with `releases.json` and release branches.
 - 🤖 Guide for using codegraph with AI coding agents (`docs/agents.md`).
 - 📝 This changelog; release notes are now taken from it.
+
+### 🔄 Changed
+- 📦 Code files now keep their short string literals in the parse cache (for `opens` links); the first build after
+  upgrading re-reads every file once.
 
 ## [0.1.0] - 2026-10-24
 

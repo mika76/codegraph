@@ -43,9 +43,12 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   `Text/`: `Scrub` (blank comments/strings, same length, returns string literals), `SqlText` (SQL refs in strings,
   `ObjectKey`), `Routes.Normalize`, `LineIndex`, `SourceText.Read` (UTF-8/UTF-16/1252).
   Inline SQL in strings and stored-proc names in strings become DB refs everywhere.
+  `ExtractorParser` reads files matched by an `extractors` rule (XPath / JSON paths -> `X["items"]`, embedded SQL via
+  the SQL parser); `Scan/CodeStrings` keeps short code string literals (`X["strings"]`) for `opens` links.
 - `Build/Builder*.cs` - files -> projects (member lists, SDK-style globbing, project refs, merged duplicate project
   files) -> symbols & indexes -> routes -> libraries (own OCX/COM/DLL/npm outputs become project->project
-  `depends_on`) -> reachability -> ref resolution -> rollups. `Build/Paths.cs`: case-insensitive path keys
+  `depends_on`) -> reachability -> extractor items (`Builder.Items.cs`: item nodes `item:<kind>:<name>`, their links,
+  `fileref:` nodes, releases) -> ref resolution -> `opens` links from code strings -> rollups. `Build/Paths.cs`: case-insensitive path keys
   (`Paths.Key`), Windows semantics everywhere.
   Resolution rule: candidates must be visible (caller's project + referenced projects); prefer same file, then
   same project; ambiguous matches are skipped, never guessed. DB objects are global (`db:<name>`).
@@ -57,7 +60,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path).
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
-`db:<object>`, `ext:<lib>`, `rel:<version>`, `concept:`. Main edge relations: contains, calls, instantiates,
+`db:<object>`, `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
 uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, reads, writes,
 executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in.
 

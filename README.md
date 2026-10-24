@@ -138,6 +138,35 @@ This is where codegraph shines: instead of grepping repo by repo, an agent (Clau
 The [agents guide](docs/agents.md) has the instructions snippet, the permissions to grant, and the `graph.json`
 format.
 
+## Your own file formats
+
+Most codebases have in-house files that tie things together: report definitions (report → report file →
+parameters → the procedures behind it), database patch lists, import mappings, menu or permission definitions.
+Describe yours with a few rules in `codegraph.json` and they join the graph:
+
+```jsonc
+"extractors": [
+  {
+    "name": "report definitions",
+    "files": ["Reports/*.xml"],
+    "node": { "kind": "report", "name": "/ReportDefinition/Name" },
+    "links": [
+      { "relation": "uses_file",     "value": "/ReportDefinition/FileName" },                 // Sales.rpt
+      { "relation": "has_parameter", "value": "//Parameter/@Field", "kind": "parameter", "to": "new" },
+      { "relation": "reads",         "value": "//Table/@Name", "to": "db" },
+      { "sql": "//InstallScript" },                                                         // parsed as T-SQL
+    ],
+    "referenced_by": ["uses_file"],   // code that names "Sales.rpt" gets an "opens" link to the report
+  },
+]
+```
+
+Values are picked with XPath (XML) or a simple path (JSON); links go to existing DB objects, projects, files,
+symbols or releases, or create nodes of their own. Then `impact Orders` lists the reports reading it, `show
+BusinessDay` the reports taking that parameter, and the vault gets an `Items/Reports` folder. The rules stay in your
+own config, so the tool knows nothing about your format. Full reference and a second example (database patches
+linked to releases): [extractors](docs/design/extractors.md).
+
 ## Adding your own knowledge
 
 **Releases** - `releases.json`. Repos checked out on a release branch like `R2.4.0` are added automatically.
@@ -227,6 +256,7 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 | `ignore` | extra ignore patterns for all repos |
 | `releases`, `releases_from_branches`, `knowledge` | your own knowledge files (see above) |
 | `proc_prefixes` | your stored procedure name prefixes, e.g. `["sp", "usp"]` |
+| `extractors` | rules for your own XML/JSON formats (see [Your own file formats](#your-own-file-formats)) |
 | `external_ignore_extra` | library names not to show as external dependencies |
 | `obsidian` | `folder` (sub-folder for generated notes), `max_routines_per_note`, `graph_colors` |
 
