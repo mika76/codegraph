@@ -70,6 +70,6 @@ executes, references (FK), triggers_on, defines/alters, depends_on, uses_library
 
 ## Known gaps / ideas (not done yet)
 - URLs built at runtime (string concatenation, jsonp helpers) are not matched to API routes. VB6 late binding
-  (Object/Variant) is not followed. Tests assume Windows paths; Linux is untested.
+  (Object/Variant) is not followed. CI runs the tests on Windows, Linux and macOS, but real use is on Windows.
 - Possible next steps: MCP server over graph.json; compare two releases as a diff report; per-release change lists
   from git; HTML viewer.
