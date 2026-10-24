@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="Shop Order Entry" Manufacturer="Example Shop Ltd" Version="1.0.0" UpgradeCode="11111111-2222-3333-4444-555555555555">
+    <MediaTemplate EmbedCab="yes" />
+    <Feature Id="Main" Title="Order Entry">
+      <ComponentGroupRef Id="OrderEntryFiles" />
+    </Feature>
+  </Package>
+  <Fragment>
+    <ComponentGroup Id="OrderEntryFiles" Directory="INSTALLFOLDER">
+      <Component>
+        <File Id="OrderEntryExe" Source="..\OrderEntry\OrderEntry.exe" KeyPath="yes" />
+      </Component>
+    </ComponentGroup>
+  </Fragment>
+</Wix>

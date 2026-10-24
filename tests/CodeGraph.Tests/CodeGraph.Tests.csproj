@@ -16,6 +16,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- invented sample repos for the end-to-end test; copied next to the test assembly -->
+    <None Include="..\Samples\**\*" LinkBase="Samples" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\CodeGraph\CodeGraph.csproj" />
   </ItemGroup>
 
