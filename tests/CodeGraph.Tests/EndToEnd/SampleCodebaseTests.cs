@@ -24,6 +24,7 @@ public sealed class SampleCodebaseTests : IDisposable
             Output = Path.Combine(_tmp, "out"),
             Vault = Path.Combine(_tmp, "vault"),
             Repos = new[] { "Shop", "Api", "Web" }.Select(n => new RepoConfig { Name = n, Path = Path.Combine(samples, n) }).ToList(),
+            Extractors = [ExtractorTests.Reports("name", "uses_file")],
         };
         var files = Scanner.Discover(_cfg);
         var (records, errors) = Scanner.ParseAll(_cfg, files, verbose: false);
@@ -145,6 +146,21 @@ public sealed class SampleCodebaseTests : IDisposable
         Assert.Contains("| Orders | table |", _report);
         Assert.Contains("| calls_api | 1 |", _report);
         Assert.Contains("| ships | 1 |", _report);
+    }
+
+    [Fact]
+    public void Report_definition_extractor_links_report_parameters_sql_and_the_screen_that_opens_it()
+    {
+        const string rep = "item:report:order summary";
+        Assert.Equal("report", _g.GetNode(rep)!.Kind);
+        Assert.NotNull(_g.GetEdge(rep, "file:Shop:Reports/Order Summary.xml", "defined_in"));
+        Assert.NotNull(_g.GetEdge(rep, "fileref:order summary.rpt", "uses_file"));
+        Assert.NotNull(_g.GetEdge(rep, "item:parameter:customerid", "has_parameter"));
+        Assert.NotNull(_g.GetEdge(rep, "db:sp_rep_ordersummary", "defines"));
+        Assert.NotNull(_g.GetEdge("db:sp_rep_ordersummary", "db:orders", "reads"));
+        Assert.NotNull(_g.GetEdge("db:sp_rep_ordersummary", "db:customers", "reads"));
+        Assert.NotNull(_g.GetEdge("sym:Shop:OrderEntry/frmOrder.frm#frmOrder.cmdReport_Click", rep, "opens"));
+        Assert.Contains("## Your own file formats", _report);
     }
 
     [Fact]

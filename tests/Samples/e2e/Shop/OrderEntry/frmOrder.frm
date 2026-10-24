@@ -25,3 +25,7 @@ Private Sub cmdPlace_Click()
         ExecuteSql "EXEC sp_Order_Place @CustomerId = 7"
     End If
 End Sub
+
+Private Sub cmdReport_Click()
+    ShowReport "Order Summary"
+End Sub

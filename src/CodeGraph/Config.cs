@@ -46,7 +46,10 @@ public sealed class ExtractorLink
     public string? Value { get; set; }
     /// <summary>auto | db | project | file | symbol | release | new.</summary>
     public string To { get; set; } = "auto";
-    /// <summary>Optional regex applied to each value, with <see cref="Replace"/> (e.g. "^(\\d\\d)(\\d\\d)(\\d\\d)$" -> "$1.$2.$3").</summary>
+    /// <summary>
+    /// Optional regex each value must match (others are skipped); with <see cref="Replace"/> it also rewrites the value
+    /// (e.g. "^(\\d\\d)(\\d\\d)(\\d\\d)$" -> "$1.$2.$3").
+    /// </summary>
     public string? Pattern { get; set; }
     public string? Replace { get; set; }
     /// <summary>Kind of the node to create when nothing existing matches (e.g. "parameter").</summary>
@@ -126,6 +129,9 @@ public sealed class Config
             string label = string.IsNullOrEmpty(x.Name) ? "(unnamed)" : x.Name;
             if (x.Files.Count == 0 || string.IsNullOrEmpty(x.Node.Kind) || string.IsNullOrEmpty(x.Node.Name))
                 throw new CodeGraphException($"Extractor {label}: \"files\", \"node.kind\" and \"node.name\" are required.");
+            if (x.Node.Kind.StartsWith("db_", StringComparison.OrdinalIgnoreCase) ||
+                x.Links.Any(l => l.Kind?.StartsWith("db_", StringComparison.OrdinalIgnoreCase) == true))
+                throw new CodeGraphException($"Extractor {label}: kinds starting with \"db_\" are reserved for database objects.");
             if (string.IsNullOrEmpty(x.Name)) x.Name = x.Node.Kind;
             foreach (var l in x.Links)
                 if (string.IsNullOrEmpty(l.Sql) && (string.IsNullOrEmpty(l.Value) || string.IsNullOrEmpty(l.Relation)))

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ReportDefinition>
+  <Name>Order Summary</Name>
+  <FileName>Order Summary.rpt</FileName>
+  <Group>Sales</Group>
+  <Parameters>
+    <Parameter Label="Customer" Field="CustomerId" />
+  </Parameters>
+  <InstallScripts>
+    <InstallScript><![CDATA[
+CREATE PROCEDURE dbo.sp_REP_OrderSummary
+    @CustomerId int
+AS
+SELECT o.OrderId, o.Total, c.Name
+FROM Orders o
+JOIN Customers c ON c.CustomerId = o.CustomerId
+WHERE o.CustomerId = @CustomerId
+]]></InstallScript>
+  </InstallScripts>
+</ReportDefinition>

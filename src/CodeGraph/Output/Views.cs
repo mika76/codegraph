@@ -92,7 +92,9 @@ public sealed class Views
             if (tk.StartsWith("db_", StringComparison.Ordinal) && DbRels.Contains(rel))
             {
                 bool srcDb = sk.StartsWith("db_", StringComparison.Ordinal);
-                string? src = srcDb ? s : FileOf.GetValueOrDefault(s);
+                // an extractor item (report, patch ...) is a user in its own right, not just its definition file
+                bool srcItem = g.GetNode(s)?.Str("extractor") is not null;
+                string? src = srcDb || srcItem ? s : FileOf.GetValueOrDefault(s);
                 if (!string.IsNullOrEmpty(src))
                 {
                     Of(DbUsers, t).Add((src, rel), e.Count);

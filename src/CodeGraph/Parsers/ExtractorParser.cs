@@ -53,7 +53,12 @@ public static class ExtractorParser
                 foreach (var (raw, line) in item.Values(l.Value!))
                 {
                     string v = raw.Trim();
-                    if (rewrite is not null && rewrite.IsMatch(v)) v = rewrite.Replace(v, l.Replace ?? "").Trim();
+                    if (rewrite is not null)
+                    {
+                        // a pattern is also a filter: values that don't match are skipped
+                        if (!rewrite.IsMatch(v)) continue;
+                        if (l.Replace is not null) v = rewrite.Replace(v, l.Replace).Trim();
+                    }
                     if (v.Length == 0) continue;
                     var lo = new JsonObject { ["relation"] = l.Relation, ["value"] = v, ["to"] = l.To, ["line"] = line };
                     if (!string.IsNullOrEmpty(l.Kind)) lo["kind"] = l.Kind;
