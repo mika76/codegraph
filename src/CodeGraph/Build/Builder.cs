@@ -33,6 +33,8 @@ public sealed partial class Builder
     ];
     public static readonly HashSet<string> RoutineKinds =
         ["sub", "function", "property", "event_handler", "method", "constructor", "api_declare", "operator"];
+    /// <summary>Things code uses by value: enum members and constants (relation "uses_value").</summary>
+    public static readonly HashSet<string> ValueKinds = ["enum_member", "constant"];
     public static readonly HashSet<string> DbKinds =
         ["db_table", "db_view", "db_proc", "db_function", "db_trigger", "db_type", "db_synonym"];
     private static readonly HashSet<string> SystemDlls =
@@ -47,7 +49,7 @@ public sealed partial class Builder
     private static readonly HashSet<string> RollupRelations =
     [
         "calls", "instantiates", "uses_type", "inherits", "calls_native", "includes", "executes", "reads", "writes",
-        "imports", "uses_component",
+        "imports", "uses_component", "uses_value",
     ];
     private static readonly string[] MemberExts = [".frm", ".bas", ".cls", ".ctl", ".cs", ".vb", ".cpp", ".c", ".h", ".sql"];
 
@@ -102,6 +104,10 @@ public sealed partial class Builder
     private readonly Dictionary<(string?, string), List<string>> _typeIndex = [];
     private readonly Dictionary<(string?, string), Dictionary<string, List<string>>> _members = [];
     private readonly Dictionary<(string?, string), List<string>> _globals = [];
+    /// <summary>File id -> name -> enum members / constants declared in it.</summary>
+    private readonly Dictionary<string, Dictionary<string, List<string>>> _fileValues = [];
+    /// <summary>VB: public enum members and public module constants, usable by bare name across visible projects.</summary>
+    private readonly Dictionary<(string?, string), List<string>> _globalValues = [];
     private readonly Dictionary<(string?, string), HashSet<string>> _bases = [];
     private readonly Dictionary<string, string> _vbGlobals = [];
     private readonly Dictionary<string, string> _symFile = [];
@@ -409,7 +415,7 @@ public sealed partial class Builder
     private void Symbols()
     {
         var dbDefs = new Dictionary<string, List<(int Score, Rec R, Symbol S)>>();
-        string[] symAttrs = ["namespace", "controls", "control_types", "overloads", "exported", "bases"];
+        string[] symAttrs = ["namespace", "controls", "control_types", "overloads", "exported", "bases", "value"];
 
         foreach (var r in _records)
         {
@@ -468,6 +474,22 @@ public sealed partial class Builder
                     bool isPublic = (s.Visibility ?? "public") is "public" or "global" or "friend";
                     if (fam == "vb" && isModule && isPublic || fam is "cpp" or "ps" or "js" && string.IsNullOrEmpty(s.Parent))
                         GetOrAdd(_globals, (fam, nameLow)).Add(sid);
+                }
+                else if (ValueKinds.Contains(s.Kind))
+                {
+                    // enum members and constants: Enum.Member / Module.Const like routines, bare names in VB
+                    if (!string.IsNullOrEmpty(s.Parent))
+                    {
+                        string tkey = LastPart(s.Parent).ToLowerInvariant();
+                        GetOrAdd(GetOrAdd(_members, (fam, tkey)), nameLow).Add(sid);
+                        if (s.Parent.ToLowerInvariant() != tkey)
+                            GetOrAdd(GetOrAdd(_members, (fam, s.Parent.ToLowerInvariant())), nameLow).Add(sid);
+                    }
+                    GetOrAdd(GetOrAdd(_fileValues, fid), nameLow).Add(sid);
+                    bool isPublic = (s.Visibility ?? "public") is "public" or "global" or "friend";
+                    bool vbGlobal = lang == "vb6" && isPublic &&
+                                    (s.Kind == "enum_member" || r.Rel.EndsWith(".bas", StringComparison.OrdinalIgnoreCase));
+                    if (vbGlobal) GetOrAdd(_globalValues, (fam, nameLow)).Add(sid);
                 }
             }
             _fileSyms[fid] = local;
@@ -663,13 +685,17 @@ public sealed partial class Builder
     {
         bool ok = false;
         foreach (var t in targets)
-            if (t != caller && _g.AddEdge(caller, t, rel, attrs: attrs) is not null)
+            if (t != caller && _g.AddEdge(caller, t, ValueRel(t, rel), attrs: attrs) is not null)
                 ok = true;
         return ok;
     }
 
     private bool Edge(string source, string target, string rel, params (string, JsonNode?)[] attrs) =>
-        _g.AddEdge(source, target, rel, attrs: attrs) is not null;
+        _g.AddEdge(source, target, ValueRel(target, rel), attrs: attrs) is not null;
+
+    /// <summary>A "call" that lands on an enum member or constant is a use of its value.</summary>
+    private string ValueRel(string target, string rel) =>
+        rel == "calls" && _g.GetNode(target) is { } n && ValueKinds.Contains(n.Kind) ? "uses_value" : rel;
 
     private bool ResolveOne(string? fam, string fid, string caller, Ref rf)
     {
@@ -769,8 +795,12 @@ public sealed partial class Builder
                 string low = name.ToLowerInvariant();
                 if (_fileRoutines.GetValueOrDefault(fid)?.GetValueOrDefault(low) is { Count: > 0 } same)
                     return EdgeToTargets(caller, same, "calls", lineAttr);
+                if (_fileValues.GetValueOrDefault(fid)?.GetValueOrDefault(low) is { Count: > 0 } sameValue)
+                    return EdgeToTargets(caller, sameValue, "uses_value", lineAttr);
                 var glob = Pick(fid, _globals.GetValueOrDefault((fam, low)) ?? []);
                 if (glob.Count > 0) return EdgeToTargets(caller, glob, "calls", lineAttr);
+                var globValue = Pick(fid, _globalValues.GetValueOrDefault((fam, low)) ?? []);
+                if (globValue.Count > 0) return EdgeToTargets(caller, globValue, "uses_value", lineAttr);
                 var tg = Pick(fid, _typeIndex.GetValueOrDefault((fam, low)) ?? []);
                 return tg.Count > 0 && EdgeToTargets(caller, tg, "uses_type", lineAttr);
             }

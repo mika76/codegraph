@@ -41,7 +41,7 @@ public sealed class Views
     public static readonly string[] CodeRels =
     [
         "calls", "instantiates", "uses_type", "inherits", "calls_native", "includes", "mentions", "imports",
-        "uses_component", "calls_api", "renders",
+        "uses_component", "calls_api", "renders", "uses_value",
     ];
 
     public static readonly string[] DbRels = ["reads", "writes", "executes", "calls", "alters", "references", "triggers_on"];

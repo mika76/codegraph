@@ -66,6 +66,41 @@ public static partial class Vb6Parser
     private static partial Regex ParenRe();
     [GeneratedRegex(@"\.\s*(AddNew|Update|UpdateBatch|Delete)\b(?!\s*=)", RegexOptions.CultureInvariant)]
     private static partial Regex RsWriteRe();
+    [GeneratedRegex(@"^\s*(?:(Public|Private|Global|Friend)\s+)?Enum\s+([A-Za-z_]\w*)", O)]
+    private static partial Regex EnumStart();
+    [GeneratedRegex(@"^\s*End\s+Enum\b", O)]
+    private static partial Regex EnumEnd();
+    [GeneratedRegex(@"^\s*\[?([A-Za-z_]\w*)\]?\s*(?:=\s*(.+?))?\s*$", RegexOptions.CultureInvariant)]
+    private static partial Regex EnumMemberRe();
+    [GeneratedRegex(@"^\s*(?:(Public|Private|Global|Friend|Protected|Shared)\s+)*Const\s+(.+)$", O)]
+    private static partial Regex ConstDecl();
+    [GeneratedRegex(@"^\s*([A-Za-z_]\w*)[$%&!#@]?\s*(?:As\s+[\w.]+\s*)?=\s*(.+)$", O)]
+    private static partial Regex ConstItem();
+
+    /// <summary>Split on commas that are not inside quotes or parentheses.</summary>
+    private static List<string> SplitTop(string s)
+    {
+        var parts = new List<string>();
+        int depth = 0, start = 0;
+        bool inStr = false;
+        for (int i = 0; i < s.Length; i++)
+        {
+            char c = s[i];
+            if (c == '"') inStr = !inStr;
+            else if (inStr) continue;
+            else if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == ',' && depth == 0) { parts.Add(s[start..i]); start = i + 1; }
+        }
+        parts.Add(s[start..]);
+        return parts;
+    }
+
+    private static string ShortValue(string v)
+    {
+        v = WsRe().Replace(v.Trim(), " ");
+        return v.Length > 120 ? v[..117] + "..." : v;
+    }
 
     private static readonly HashSet<string> VbKeywords = new(
         ("and as boolean byref byte byval call case const currency date debug declare dim do double each " +
@@ -131,6 +166,14 @@ public static partial class Vb6Parser
         var (code, strings) = Scrub.Vb(codeText);
         var li = new LineIndex(code);
         var codeLines = code.Split('\n');
+
+        // the original text of a line up to where its code ends (string contents kept, comment dropped)
+        string RawCode(int idx)
+        {
+            string raw = idx < lines.Length ? lines[idx].TrimEnd('\r') : "";
+            int end = Math.Min(raw.Length, codeLines[idx].TrimEnd().Length);
+            return raw[..end];
+        }
 
         string LogicalLine(int idx)
         {
@@ -219,14 +262,60 @@ public static partial class Vb6Parser
             };
         }
 
-        // ---- find routines
+        // ---- find routines (and, outside them, enums and constants)
         var routines = new List<Routine>();
         Routine? openR = null;
+        var constAtLine = new Dictionary<int, string>();   // 1-based line -> constant declared there
+        string? openEnum = null, enumVis = null;
+        long nextEnumValue = 0;
         for (int i = 0; i < codeLines.Length; i++)
         {
             string ln = codeLines[i];
+            if (openR is null && openEnum is not null)
+            {
+                if (EnumEnd().IsMatch(ln)) { openEnum = null; continue; }
+                if (ln.Trim().Length == 0) continue;
+                var em = EnumMemberRe().Match(RawCode(i));
+                if (!em.Success) continue;
+                string? value = em.Groups[2].Success ? ShortValue(em.Groups[2].Value) : null;
+                // VB numbers members without a value from the previous one
+                if (value is null) value = nextEnumValue.ToString();
+                nextEnumValue = long.TryParse(value, out long nv) ? nv + 1 : nextEnumValue + 1;
+                var ms = new Symbol { Name = em.Groups[1].Value, Kind = "enum_member", Line = i + 1, Parent = openEnum, Visibility = enumVis };
+                ms.X["value"] = value;
+                symbols.Add(ms);
+                continue;
+            }
             if (openR is null)
             {
+                var en = EnumStart().Match(ln);
+                if (en.Success)
+                {
+                    openEnum = en.Groups[2].Value;
+                    enumVis = (en.Groups[1].Success ? en.Groups[1].Value : "public").ToLowerInvariant();
+                    nextEnumValue = 0;
+                    // VB.NET enums are already types (vbnetTypes); VB6 enums are declared here
+                    if (lang == "vb6")
+                        symbols.Add(new Symbol { Name = openEnum, Kind = "enum", Line = i + 1, Parent = null, Visibility = enumVis });
+                    continue;
+                }
+                var cd = ConstDecl().Match(ln);
+                if (cd.Success)
+                {
+                    string vis = (cd.Groups[1].Success ? cd.Groups[1].Value : "private").ToLowerInvariant();
+                    if (vis == "global") vis = "public";
+                    string raw = RawCode(i);
+                    int restAt = cd.Groups[2].Index;
+                    foreach (var part in SplitTop(restAt < raw.Length ? raw[restAt..] : ""))
+                    {
+                        var ci = ConstItem().Match(part);
+                        if (!ci.Success) continue;
+                        var cs = new Symbol { Name = ci.Groups[1].Value, Kind = "constant", Line = i + 1, Parent = containerFor(i + 1), Visibility = vis };
+                        cs.X["value"] = ShortValue(ci.Groups[2].Value);
+                        symbols.Add(cs);
+                        constAtLine.TryAdd(i + 1, cs.Name);
+                    }
+                }
                 var m = Declare().Match(ln);
                 if (m.Success)
                 {
@@ -396,25 +485,28 @@ public static partial class Vb6Parser
         }
 
         // ---- strings -> SQL / literals, attributed to the routine they sit in
-        var order = new List<int>();
-        var byOwner = new Dictionary<int, List<(int Line, string S)>>();
+        // (outside routines, a string in a Const declaration belongs to that constant)
+        var order = new List<(int Ri, string? Const)>();
+        var byOwner = new Dictionary<(int Ri, string? Const), List<(int Line, string S)>>();
         foreach (var (pos, s) in strings)
         {
             int line = li.Line(pos);
             int ri = line - 1 >= 0 && line - 1 < ownerOfLine.Length ? ownerOfLine[line - 1] : -1;
-            if (!byOwner.TryGetValue(ri, out var list))
+            var key = (ri, ri < 0 ? constAtLine.GetValueOrDefault(line) : null);
+            if (!byOwner.TryGetValue(key, out var list))
             {
-                byOwner[ri] = list = [];
-                order.Add(ri);
+                byOwner[key] = list = [];
+                order.Add(key);
             }
             list.Add((line, s));
         }
-        foreach (int ri in order)
+        foreach (var key in order)
         {
-            var items = byOwner[ri];
+            var items = byOwner[key];
+            int ri = key.Ri;
             var r = ri >= 0 ? routines[ri] : null;
-            string? owner = r?.Name;
-            string? parent = r is not null ? containerFor(r.Start + 1) : null;
+            string? owner = r?.Name ?? key.Const;
+            string? parent = r is not null ? containerFor(r.Start + 1) : key.Const is not null ? containerFor(items[0].Line) : null;
             string joined = string.Join(" ", items.Select(i => i.S));
             if (SqlText.LooksLikeSql(joined))
             {

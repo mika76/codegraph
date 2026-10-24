@@ -33,6 +33,8 @@ public static partial class CSharpParser
     [GeneratedRegex(@"^((\w+)\s+)*[\w.]+(\s*<[^;{}()]*>)?(\[\s*\])?\??\z", O)] private static partial Regex DeclPrefixRe();
     [GeneratedRegex(@"<.*>", O)] private static partial Regex GenericRe();
     [GeneratedRegex(@"\s+", O)] private static partial Regex WsRe();
+    [GeneratedRegex(@"^\s*(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*(?:=\s*(\S[^,]*?))?\s*$", O)] private static partial Regex EnumMemberRe();
+    [GeneratedRegex(@"(?:\b(public|private|protected|internal)\s+)?(?:(?:new|static|unsafe|protected|internal)\s+)*\bconst\s+[\w.<>?\[\]]+\s+([A-Za-z_]\w*)\s*=\s*([^;]+);", O)] private static partial Regex ConstRe();
     [GeneratedRegex(@"\[area\]/?", O)] private static partial Regex AreaRe();
 
     private static readonly HashSet<string> Modifiers =
@@ -326,6 +328,49 @@ public static partial class CSharpParser
             }
             seen[key] = sym;
             symbols.Add(sym);
+        }
+
+        // ---- enum members and constants (with their values; SQL in a constant belongs to the constant)
+        foreach (var t in types)
+        {
+            int bs = t.Open + 1, be = Math.Min(t.Close, code.Length);
+            if (be <= bs) continue;
+            if (t.Kind == "enum")
+            {
+                long next = 0;
+                int start = bs;
+                for (int i = bs; i <= be; i++)
+                {
+                    if (i < be && (code[i] != ',' || depths[i] != t.Depth)) continue;
+                    int partAt = start;
+                    start = i + 1;
+                    var em = EnumMemberRe().Match(code[partAt..i]);
+                    if (!em.Success) continue;
+                    string value = em.Groups[2].Success ? WsRe().Replace(text.Substring(partAt + em.Groups[2].Index, em.Groups[2].Length).Trim(), " ") : next.ToString();
+                    next = long.TryParse(value, out long nv) ? nv + 1 : next + 1;
+                    var ms = new Symbol { Name = em.Groups[1].Value, Kind = "enum_member", Line = li.Line(partAt + em.Groups[1].Index), Parent = t.Qual, Visibility = "public" };
+                    ms.X["value"] = value.Length > 120 ? value[..117] + "..." : value;
+                    symbols.Add(ms);
+                }
+                continue;
+            }
+            for (Match cm = ConstRe().Match(code, bs, be - bs); cm.Success; cm = cm.NextMatch())
+            {
+                if (depths[cm.Index] != t.Depth) continue;
+                string raw = text.Substring(cm.Groups[3].Index, cm.Groups[3].Length).Trim();
+                var cs = new Symbol
+                {
+                    Name = cm.Groups[2].Value, Kind = "constant", Line = li.Line(cm.Groups[2].Index), Parent = t.Qual,
+                    Visibility = cm.Groups[1].Success ? cm.Groups[1].Value : "private",
+                };
+                string shown = WsRe().Replace(raw, " ");
+                cs.X["value"] = shown.Length > 120 ? shown[..117] + "..." : shown;
+                symbols.Add(cs);
+                string sql = string.Join(" ", Scrub.CLike(raw).Strings.Select(s => s.Value));
+                if (SqlText.LooksLikeSql(sql))
+                    foreach (var (mode, nm) in SqlText.Refs(sql).OrderBy(f => f.Mode, StringComparer.Ordinal).ThenBy(f => f.Name, StringComparer.Ordinal))
+                        refs.Add(new Ref { From = cs.Name, FromParent = t.Qual, Kind = "sql", Mode = mode, Name = nm, Line = cs.Line });
+            }
         }
 
         // ---- references inside method bodies

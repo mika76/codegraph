@@ -30,6 +30,22 @@ public static partial class JavaScriptParser
 
     [GeneratedRegex($$"""(?<![\w$.])(?:export\s+)?(?:const\s+)?enum\s+({{Id}})\s*\{""", O)]
     private static partial Regex EnumRe();
+    [GeneratedRegex(@"^\s*[""']?([A-Za-z_$][\w$]*)[""']?\s*(?:=\s*(\S[^,]*?))?\s*$", O)]
+    private static partial Regex EnumMemberRe();
+
+    /// <summary>Comma-separated parts of code[from..to) at the outermost brace/paren level.</summary>
+    private static IEnumerable<(int Start, int End)> TopLevelSegments(string code, int from, int to)
+    {
+        int depth = 0, start = from;
+        for (int i = from; i < to && i < code.Length; i++)
+        {
+            char c = code[i];
+            if (c is '(' or '[' or '{') depth++;
+            else if (c is ')' or ']' or '}') depth--;
+            else if (c == ',' && depth == 0) { yield return (start, i); start = i + 1; }
+        }
+        if (to > start) yield return (start, Math.Min(to, code.Length));
+    }
 
     [GeneratedRegex($$"""(?<![\w$.])(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s*\*?\s*({{Id}})\s*(?:<[^(]*?>)?\s*\(""", O)]
     private static partial Regex FuncRe();
@@ -395,6 +411,26 @@ public static partial class JavaScriptParser
                     Name = m.Groups[1].Value, Kind = kind, Line = li.Line(m.Index), Parent = null, Visibility = "public",
                     Lines = li.Line(close) - li.Line(m.Index) + 1,
                 });
+                if (kind == "enum")
+                {
+                    // members, numbered from the previous one when they have no value (like TypeScript)
+                    long next = 0;
+                    int bodyAt = m.Index + m.Length;
+                    foreach (var seg in TopLevelSegments(code, bodyAt, close))
+                    {
+                        var em = EnumMemberRe().Match(code[seg.Start..seg.End]);
+                        if (!em.Success) continue;
+                        string value = em.Groups[2].Success ? text.Substring(seg.Start + em.Groups[2].Index, em.Groups[2].Length).Trim() : next.ToString();
+                        next = long.TryParse(value, out long nv) ? nv + 1 : next + 1;
+                        var ms = new Symbol
+                        {
+                            Name = em.Groups[1].Value, Kind = "enum_member", Line = li.Line(seg.Start + em.Groups[1].Index),
+                            Parent = m.Groups[1].Value, Visibility = "public",
+                        };
+                        ms.X["value"] = value.Length > 120 ? value[..117] + "..." : value;
+                        symbols.Add(ms);
+                    }
+                }
                 if (kind == "interface" && m.Groups[2].Success)
                     foreach (var b in m.Groups[2].Value.Split(','))
                         if (b.Trim().Length > 0)
