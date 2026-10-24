@@ -8,6 +8,10 @@
     <AssemblyName>codegraph</AssemblyName>
     <RootNamespace>CodeGraph</RootNamespace>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- release builds pass -p:Version=x.y.z from the git tag -->
+    <Version>0.0.0-dev</Version>
+    <Authors>Mladen Mihajlović</Authors>
+    <Description>Cross-repo code knowledge graph and Obsidian vault for legacy and mixed-language codebases.</Description>
     <!-- `dotnet publish -r win-x64` (or linux-x64) produces a single native executable -->
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>

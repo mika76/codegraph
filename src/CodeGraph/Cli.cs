@@ -15,7 +15,14 @@ public static class Cli
                 codegraph init                           write example codegraph.json, releases.json, knowledge.json here
 
         Options: -c, --config <file>   config file (default: codegraph.json in the current folder)
+                 --version             print the version
         """;
+
+    /// <summary>Informational version without the "+commit" suffix the SDK appends.</summary>
+    public static string Version =>
+        (typeof(Cli).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
+            .FirstOrDefault() as System.Reflection.AssemblyInformationalVersionAttribute)?.InformationalVersion.Split('+')[0]
+        ?? "dev";
 
     public static int Run(string[] argv)
     {
@@ -24,6 +31,11 @@ public static class Cli
         if (args.Count == 0 || args[0] is "-h" or "--help" or "help")
         {
             Console.WriteLine(Usage);
+            return 0;
+        }
+        if (args[0] is "--version" or "version")
+        {
+            Console.WriteLine($"codegraph {Version}");
             return 0;
         }
         string cmd = args[0];

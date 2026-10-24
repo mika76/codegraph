@@ -1,0 +1,80 @@
+name: Release
+
+# Push a tag like v0.1.0 to build native executables for every platform and attach them to a GitHub release.
+# Run it by hand (workflow_dispatch) to only build the binaries as workflow artifacts.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { rid: win-x64,     os: windows-latest }
+          - { rid: win-arm64,   os: windows-11-arm }
+          - { rid: linux-x64,   os: ubuntu-latest }
+          - { rid: linux-arm64, os: ubuntu-24.04-arm }
+          - { rid: osx-arm64,   os: macos-latest }
+          - { rid: osx-x64,     os: macos-latest }   # cross-compiled on Apple silicon
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Native AOT prerequisites (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+
+      - name: Version from tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then v="${GITHUB_REF#refs/tags/v}"; else v="0.0.0-ci.${GITHUB_RUN_NUMBER}"; fi
+          echo "VERSION=$v" >> "$GITHUB_ENV"
+
+      - name: Publish
+        shell: bash
+        run: dotnet publish src/CodeGraph -c Release -r ${{ matrix.rid }} -p:Version=$VERSION -o out/codegraph
+
+      - name: Smoke test
+        if: matrix.rid != 'osx-x64'   # cross-compiled: can't run on this runner
+        shell: bash
+        run: |
+          exe=out/codegraph/codegraph; [[ "${{ runner.os }}" == "Windows" ]] && exe="$exe.exe"
+          "$exe" --version
+          mkdir -p smoke && cd smoke && "../$exe" init && ls codegraph.json releases.json knowledge.json
+
+      - name: Package
+        shell: bash
+        run: |
+          cp LICENSE README.md out/codegraph/
+          rm -f out/codegraph/*.pdb out/codegraph/*.dbg
+          cd out
+          name="codegraph-$VERSION-${{ matrix.rid }}"
+          if [[ "${{ matrix.rid }}" == win-* ]]; then 7z a "$name.zip" codegraph > /dev/null; else tar -czf "$name.tar.gz" codegraph; fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: codegraph-${{ matrix.rid }}
+          path: out/codegraph-*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "$GITHUB_REF_NAME" --generate-notes
