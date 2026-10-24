@@ -9,6 +9,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-25
+
+🧱 Your own file formats, enums and constants.
+
 ### ✨ Added
 - 🧱 **Extractors for your own file formats**: rules in `codegraph.json` (`extractors`) read in-house XML/JSON files -
   report definitions, patch lists, mappings - into graph nodes and links. XPath / JSON paths pick the values; links
@@ -59,5 +63,6 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 📦 **Native executables** for Windows, Linux and macOS (x64 and ARM64) on every release; CI runs the tests on all
   three systems.
 
-[Unreleased]: https://github.com/mika76/codegraph/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/mika76/codegraph/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/mika76/codegraph/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mika76/codegraph/releases/tag/v0.1.0

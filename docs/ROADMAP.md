@@ -25,11 +25,11 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
     parser to improve next.
 - **`packages.config`** (S). Read the NuGet packages and versions of old-style .NET projects and attach them to
   the project in the same folder, so "which apps use library X, and which version?" works for them too.
-- [x] **Your own file formats** (built, in the next release). Declarative extractors in `codegraph.json` read
+- [x] **Your own file formats** (built, 0.2.0). Declarative extractors in `codegraph.json` read
   in-house XML/JSON files (report definitions, patch lists, mappings) into nodes and links - see
   [extractors](design/extractors.md). Not built: an "external command" escape hatch, only if a format turns up that
   rules can't describe.
-- [x] **Enums and constants** (built, in the next release). VB6 `Enum` blocks; enum members (VB6, VB.NET, C#, TS) and constants (VB6 `Const`,
+- [x] **Enums and constants** (built, 0.2.0). VB6 `Enum` blocks; enum members (VB6, VB.NET, C#, TS) and constants (VB6 `Const`,
   C# `const`) as nodes with their values, linked from the code that uses them (`uses_value`) - including VB6's
   unqualified enum members - so "who uses `OrderStatus.Shipped`?" works, and SQL kept in a constant links its
   tables to the code that uses the constant.

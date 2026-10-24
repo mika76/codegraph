@@ -1,6 +1,6 @@
 # Design: extractors for your own file formats
 
-Status: **built** (in the next release). This page is the reference for the `extractors` setting.
+Status: **built** (since 0.2.0). This page is the reference for the `extractors` setting.
 
 ## Problem
 
