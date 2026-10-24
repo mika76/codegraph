@@ -10,6 +10,51 @@ public sealed class RepoConfig
     public List<string> Ignore { get; set; } = [];
 }
 
+/// <summary>Rules that turn one of your own XML/JSON file formats into graph nodes and links (docs/design/extractors.md).</summary>
+public sealed class ExtractorConfig
+{
+    public string Name { get; set; } = "";
+    /// <summary>Patterns like the ignore rules: a bare name matches anywhere, a path with '/' from the repo root.</summary>
+    public List<string> Files { get; set; } = [];
+    /// <summary>Only these repos (default: all).</summary>
+    public List<string> Repos { get; set; } = [];
+    /// <summary>"xml" or "json" (default: from the file extension, xml unless .json).</summary>
+    public string? Format { get; set; }
+    /// <summary>Path selecting one item per match (default: the document root).</summary>
+    public string? Items { get; set; }
+    public ExtractorNode Node { get; set; } = new();
+    public List<ExtractorLink> Links { get; set; } = [];
+    /// <summary>XML namespace prefixes for the paths; without it, element names match ignoring namespaces.</summary>
+    public Dictionary<string, string> Namespaces { get; set; } = [];
+    /// <summary>Link code string literals equal to "name" and/or "uses_file" values to the item (relation "opens").</summary>
+    public List<string> ReferencedBy { get; set; } = [];
+}
+
+public sealed class ExtractorNode
+{
+    public string Kind { get; set; } = "";
+    /// <summary>Path (relative to the item) of the node's name.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Display attributes: label -> path.</summary>
+    public Dictionary<string, string> Attrs { get; set; } = [];
+}
+
+public sealed class ExtractorLink
+{
+    public string? Relation { get; set; }
+    /// <summary>Path (relative to the item) of the linked names; each value found gives one link.</summary>
+    public string? Value { get; set; }
+    /// <summary>auto | db | project | file | symbol | release | new.</summary>
+    public string To { get; set; } = "auto";
+    /// <summary>Optional regex applied to each value, with <see cref="Replace"/> (e.g. "^(\\d\\d)(\\d\\d)(\\d\\d)$" -> "$1.$2.$3").</summary>
+    public string? Pattern { get; set; }
+    public string? Replace { get; set; }
+    /// <summary>Kind of the node to create when nothing existing matches (e.g. "parameter").</summary>
+    public string? Kind { get; set; }
+    /// <summary>Path of text to parse as T-SQL instead of a link.</summary>
+    public string? Sql { get; set; }
+}
+
 public sealed class ObsidianConfig
 {
     /// <summary>Sub-folder inside the vault for generated notes ("" = vault root).</summary>
@@ -48,6 +93,7 @@ public sealed class Config
     /// <summary>Added to <see cref="ExternalIgnore"/> instead of replacing it.</summary>
     public List<string> ExternalIgnoreExtra { get; set; } = [];
     public ObsidianConfig Obsidian { get; set; } = new();
+    public List<ExtractorConfig> Extractors { get; set; } = [];
 
     [JsonIgnore] public string ConfigDir { get; set; } = "";
 
@@ -74,6 +120,16 @@ public sealed class Config
             r.Path = Resolve(dir, r.Path)!;
             if (string.IsNullOrEmpty(r.Name))
                 r.Name = System.IO.Path.GetFileName(r.Path.TrimEnd('/', '\\')) is { Length: > 0 } n ? n : r.Path;
+        }
+        foreach (var x in cfg.Extractors)
+        {
+            string label = string.IsNullOrEmpty(x.Name) ? "(unnamed)" : x.Name;
+            if (x.Files.Count == 0 || string.IsNullOrEmpty(x.Node.Kind) || string.IsNullOrEmpty(x.Node.Name))
+                throw new CodeGraphException($"Extractor {label}: \"files\", \"node.kind\" and \"node.name\" are required.");
+            if (string.IsNullOrEmpty(x.Name)) x.Name = x.Node.Kind;
+            foreach (var l in x.Links)
+                if (string.IsNullOrEmpty(l.Sql) && (string.IsNullOrEmpty(l.Value) || string.IsNullOrEmpty(l.Relation)))
+                    throw new CodeGraphException($"Extractor {label}: each link needs \"relation\" and \"value\" (or \"sql\").");
         }
         var dupes = cfg.Repos.GroupBy(r => r.Name, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1).Select(g => g.Key).Order().ToList();
@@ -102,4 +158,5 @@ public sealed class CodeGraphException(string message) : Exception(message);
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
     PropertyNameCaseInsensitive = true)]
 [JsonSerializable(typeof(Config))]
+[JsonSerializable(typeof(ExtractorConfig))]
 internal sealed partial class ConfigJson : JsonSerializerContext;

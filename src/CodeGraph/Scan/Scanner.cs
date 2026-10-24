@@ -3,12 +3,17 @@ using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using CodeGraph.Model;
+using CodeGraph.Parsers;
 using CodeGraph.Text;
 
 namespace CodeGraph.Scan;
 
 /// <summary>A source file found in a repo.</summary>
-public sealed record SourceFile(string Repo, string Root, string Rel, string Abs, long Size, long MtimeTicks);
+public sealed record SourceFile(string Repo, string Root, string Rel, string Abs, long Size, long MtimeTicks)
+{
+    /// <summary>The extractor that reads this file instead of a built-in parser, if any.</summary>
+    public ExtractorConfig? Extractor { get; init; }
+}
 
 /// <summary>A source file with what its parser found.</summary>
 public sealed record FileRecord(string Repo, string Root, string Rel, string Abs, FileFacts Facts);
@@ -19,7 +24,7 @@ public sealed record ParseError(string Repo, string Rel, string Message);
 public static class Scanner
 {
     /// <summary>Bump whenever a parser's output changes, otherwise the stale cache is used.</summary>
-    public const int ParserVersion = 2;
+    public const int ParserVersion = 3;
 
     public const string CacheFileName = "cache.json";
 
@@ -40,6 +45,9 @@ public static class Scanner
                 .. ReadIgnoreFile(Path.Combine(root, ".codegraphignore")),
                 .. ReadIgnoreFile(Path.Combine(root, ".graphifyignore")),
             ]);
+            var extractors = cfg.Extractors
+                .Where(x => x.Repos.Count == 0 || x.Repos.Contains(repo.Name, StringComparer.OrdinalIgnoreCase))
+                .Select(x => (Config: x, Files: new IgnoreRules(x.Files))).ToList();
             Walk(new DirectoryInfo(root), "");
 
             void Walk(DirectoryInfo dir, string relDir)
@@ -58,9 +66,11 @@ public static class Scanner
                     }
                     else if (e is FileInfo f)
                     {
-                        if (ParserRegistry.For(f.Name) is null || ignore.IsIgnored(rel)) continue;
-                        if (f.Length > maxBytes) continue;
-                        output.Add(new SourceFile(repo.Name, root, rel, f.FullName, f.Length, f.LastWriteTimeUtc.Ticks));
+                        // an extractor's "files" pattern is matched like an ignore rule; it wins over a built-in parser
+                        var extractor = extractors.FirstOrDefault(x => x.Files.IsIgnored(rel)).Config;
+                        if (extractor is null && ParserRegistry.For(f.Name) is null || ignore.IsIgnored(rel)) continue;
+                        if (f.Length > maxBytes && extractor is null) continue; // files you named in an extractor are always read
+                        output.Add(new SourceFile(repo.Name, root, rel, f.FullName, f.Length, f.LastWriteTimeUtc.Ticks) { Extractor = extractor });
                     }
                 }
             }
@@ -74,13 +84,16 @@ public static class Scanner
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return []; }
     }
 
-    public static FileFacts ParseOne(string absPath, string rel, out string? error)
+    public static FileFacts ParseOne(string absPath, string rel, out string? error, ExtractorConfig? extractor = null)
     {
         error = null;
         try
         {
             string text = SourceText.Read(absPath);
-            return ParserRegistry.For(Path.GetFileName(absPath))!(rel, text);
+            if (extractor is not null) return ExtractorParser.Parse(rel, text, extractor);
+            var facts = ParserRegistry.For(Path.GetFileName(absPath))!(rel, text);
+            CodeStrings.Add(Path.GetFileName(absPath), text, facts);
+            return facts;
         }
         catch (Exception ex) // keep going on odd files
         {
@@ -97,7 +110,7 @@ public static class Scanner
         var todo = new List<SourceFile>();
         foreach (var f in files)
         {
-            if (cache.TryGetValue(f.Abs, out var hit) && hit.Size == f.Size && hit.Mtime == f.MtimeTicks)
+            if (cache.TryGetValue(f.Abs, out var hit) && hit.Size == f.Size && hit.Mtime == f.MtimeTicks && hit.Rules == Signature(f.Extractor))
                 results[f.Abs] = hit;
             else
                 todo.Add(f);
@@ -110,8 +123,8 @@ public static class Scanner
         var options = new ParallelOptions { MaxDegreeOfParallelism = cfg.Jobs > 0 ? cfg.Jobs : Environment.ProcessorCount };
         Parallel.ForEach(todo, options, f =>
         {
-            var facts = ParseOne(f.Abs, f.Rel, out var err);
-            results[f.Abs] = new CacheEntry { Size = f.Size, Mtime = f.MtimeTicks, Facts = facts };
+            var facts = ParseOne(f.Abs, f.Rel, out var err, f.Extractor);
+            results[f.Abs] = new CacheEntry { Size = f.Size, Mtime = f.MtimeTicks, Rules = Signature(f.Extractor), Facts = facts };
             if (err is not null) errors.Add(new ParseError(f.Repo, f.Rel, err));
         });
         if (verbose && todo.Count > 0)
@@ -125,6 +138,10 @@ public static class Scanner
         var records = files.Select(f => new FileRecord(f.Repo, f.Root, f.Rel, f.Abs, results[f.Abs].Facts)).ToList();
         return (records, errors.OrderBy(e => e.Repo).ThenBy(e => e.Rel, StringComparer.OrdinalIgnoreCase).ToList());
     }
+
+    /// <summary>The extractor rules a file was read with, so changing a rule re-reads just its files.</summary>
+    private static string? Signature(ExtractorConfig? x) =>
+        x is null ? null : JsonSerializer.Serialize(x, ConfigJson.Default.ExtractorConfig);
 
     private static Dictionary<string, CacheEntry> LoadCache(string path)
     {
@@ -145,6 +162,8 @@ public sealed class CacheEntry
 {
     public long Size { get; set; }
     public long Mtime { get; set; }
+    /// <summary>Extractor rules the file was read with (null for built-in parsers).</summary>
+    public string? Rules { get; set; }
     public FileFacts Facts { get; set; } = new();
 }
 

@@ -135,7 +135,9 @@ public sealed partial class Builder
         RouteIndex();
         ProjectLibs();
         Reachability();
+        Items();
         ResolveRefs();
+        ItemReferences();
         Rollups();
         var stats = new JsonObject();
         foreach (var (k, v) in _stats) stats[k] = v;
@@ -638,7 +640,10 @@ public sealed partial class Builder
                 Inc(_stats, "refs_total");
                 // ---- who is calling
                 string caller;
-                if (lang == "sql")
+                if (XStr(rf.Extra, "item") is { } item && _g.HasNode(item))
+                    // SQL embedded in an extractor item: inside a CREATE it's the DB object, otherwise the item
+                    caller = (!string.IsNullOrEmpty(rf.From) ? _db.GetValueOrDefault(rf.From) : null) ?? item;
+                else if (lang == "sql")
                     caller = (!string.IsNullOrEmpty(rf.From) ? _db.GetValueOrDefault(rf.From) : null) ?? fid;
                 else
                 {

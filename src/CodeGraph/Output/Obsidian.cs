@@ -50,7 +50,7 @@ public static partial class Obsidian
     public const string Manifest = ".codegraph-manifest.json";
 
     public const string HomeText = "## Adding your own notes\n\nPut your own notes anywhere outside the generated folders " +
-        "(`Projects`, `Areas`, `Code`, `Database`, `Libraries`, `Releases`, `Concepts`, `Solutions`) - or in a " +
+        "(`Projects`, `Areas`, `Code`, `Database`, `Libraries`, `Releases`, `Concepts`, `Solutions`, `Items`) - or in a " +
         "`Notes/` folder. They are never touched when the vault is regenerated. Link to generated notes by " +
         "name, e.g. `[[frmMain.frm]]` or `[[Orders]]`.";
 
@@ -201,7 +201,9 @@ public static partial class Obsidian
                 "library" => ["Libraries", name],
                 "release" => ["Releases", name],
                 "concept" => ["Concepts", name],
+                "file_ref" => ["Items", "Referenced files", name],
                 _ when DbDirs.TryGetValue(k, out var dir) => ["Database", dir, name],
+                _ when n.Str("extractor") is not null => ["Items", ItemFolder(k), name],
                 _ => null,
             };
         }
@@ -711,6 +713,43 @@ public static partial class Obsidian
 
         private string Concept(string nid, Node n) => Note(n, n.Name, "Concept (from knowledge files).", []);
 
+        /// <summary>"report" -> "Reports", "parameter_set" -> "Parameter sets".</summary>
+        private static string ItemFolder(string kind)
+        {
+            string t = kind.Replace('_', ' ').Trim();
+            if (t.Length == 0) return "Items";
+            t = char.ToUpperInvariant(t[0]) + t[1..];
+            string low = t.ToLowerInvariant();
+            if (low.EndsWith('s')) return t;
+            if (low.EndsWith("ch") || low.EndsWith("sh") || low.EndsWith('x') || low.EndsWith('z')) return t + "es";
+            if (low.EndsWith('y') && low.Length > 1 && !"aeiou".Contains(low[^2])) return t[..^1] + "ies";
+            return t + "s";
+        }
+
+        // ------------------------------------------------------------------ extractor items and referenced files
+        private string Item(string nid, Node n)
+        {
+            var details = new List<string>();
+            if (n.Data["attrs"] is JsonObject attrs)
+                details.AddRange(attrs.Select(kv => $"- **{kv.Key}:** {kv.Value}"));
+            var also = StrList(n, "also_defined_in").Select(f => $"- {Link(f)}").ToList();
+            var outLinks = _v.OutOf(nid).Where(e => e.Relation != "defined_in")
+                .GroupBy(e => e.Relation).OrderBy(gr => gr.Key, Ord)
+                .SelectMany(gr => gr.Select(e => $"- **{gr.Key}** {Link(e.Target)}").Order(Ord)).ToList();
+            var inLinks = _v.InOf(nid).GroupBy(e => e.Relation).OrderBy(gr => gr.Key, Ord)
+                .SelectMany(gr => gr.Select(e => $"- {Link(e.Source)} **{gr.Key}**").Order(Ord)).ToList();
+            string where = n.Str("file") is { } f ? $", defined in {Link(f)}" : "";
+            string summary = $"{char.ToUpperInvariant(n.Kind[0]) + n.Kind[1..].Replace('_', ' ')} from the *{S(n, "extractor")}* extractor{where}.";
+            return Note(n, n.Name, summary,
+                [("Details", details), ("Links", outLinks), ("Used by", inLinks), ("Also defined in", also)]);
+        }
+
+        private string FileRef(string nid, Node n)
+        {
+            var users = _v.InOf(nid).Select(e => $"- {Link(e.Source)} **{e.Relation}**").Order(Ord).ToList();
+            return Note(n, n.Name, "A file named by your own file formats (not scanned itself).", [("Used by", users)]);
+        }
+
         // ------------------------------------------------------------------ home
         private string Home()
         {
@@ -796,7 +835,9 @@ public static partial class Obsidian
                     "library" => Library(nid, n),
                     "release" => Release(nid, n),
                     "concept" => Concept(nid, n),
+                    "file_ref" => FileRef(nid, n),
                     _ when DbDirs.ContainsKey(n.Kind) => DbObj(nid, n),
+                    _ when n.Str("extractor") is not null => Item(nid, n),
                     _ => null,
                 };
                 if (text is not null) notes[p + ".md"] = text;

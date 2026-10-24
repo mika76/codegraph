@@ -127,6 +127,23 @@ public static class Report
                 Table(["Procedure", "Calls"], Rows(ex.Take(200), x => [x.Name, x.Count])),
                 "These names are executed in code but no CREATE statement was found in the scanned repositories.");
 
+        // ---- extractors (your own file formats)
+        var items = nodes.Where(n => n.Str("extractor") is not null)
+            .GroupBy(n => (Extractor: n.Str("extractor")!, n.Kind)).OrderBy(gr => gr.Key.Extractor, o).ThenBy(gr => gr.Key.Kind, o)
+            .Select(gr => (gr.Key.Extractor, gr.Key.Kind, Count: gr.Count())).ToList();
+        if (items.Count > 0)
+        {
+            var xl = Table(["Extractor", "Kind", "Items"], Rows(items, x => [x.Extractor, x.Kind, x.Count]));
+            var miss = (unresolved ?? new Dictionary<string, int>()).Where(kv => kv.Key.StartsWith("extract:", StringComparison.Ordinal))
+                .Select(kv => (Name: kv.Key[8..], Count: kv.Value)).OrderBy(x => -x.Count).ThenBy(x => x.Name, o).ToList();
+            if (miss.Count > 0)
+            {
+                xl.AddRange(["", "Links that matched nothing (give the link a `kind` to create nodes for them, or a `to`):", ""]);
+                xl.AddRange(Table(["Extractor: link", "Times"], Rows(miss.Take(100), x => [x.Name, x.Count])));
+            }
+            Sec("Your own file formats", xl, "Items read by the extractors in codegraph.json.");
+        }
+
         // ---- orphans
         var orph = nodes.Where(n => n.Kind == "file" && n.Bool("orphan"))
             .Select(n => (Repo: n.Str("repo") ?? "", Path: n.Str("path") ?? "", Loc: n.Int("loc") ?? 0))
