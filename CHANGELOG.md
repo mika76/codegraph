@@ -17,7 +17,7 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🧱 **Extractors for your own file formats**: rules in `codegraph.json` (`extractors`) read in-house XML/JSON files -
   report definitions, patch lists, mappings - into graph nodes and links. XPath / JSON paths pick the values; links
   go to existing DB objects, projects, files, symbols or releases, or create nodes; embedded SQL is parsed as T-SQL;
-  `pattern`/`replace` rewrite values (e.g. `353800` → release `35.38.0`). Item notes go to `Items/` in the vault and
+  `pattern`/`replace` rewrite values (e.g. `240100` → release `24.1.0`). Item notes go to `Items/` in the vault and
   the report gets a "Your own file formats" section.
 - 🔗 `opens` links from code to extractor items: a string literal naming an item's file (or name) links the routine
   that contains it (`referenced_by`).

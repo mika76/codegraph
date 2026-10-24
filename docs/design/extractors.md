@@ -78,7 +78,7 @@ so `impact Orders` lists the report, `show BusinessDay` lists every report that 
   otherwise it counts as unresolved in the report. `"to": "db" | "project" | "file" | "symbol" | "release" | "new"` forces one. `release` links to the release
   node of that version (`24.00.00` becomes `24.0.0`), creating it if no release file or branch has it yet.
 - **`pattern` / `replace`** on a link: a regex each value must match (others are skipped), optionally rewriting
-  it - e.g. `"^(\d\d)(\d\d)(\d\d)$"` → `"$1.$2.$3"` turns `353800` into release `35.38.0`, `"^([^;]+)(;\d+)?$"` → `"$1"`
+  it - e.g. `"^(\d\d)(\d\d)(\d\d)$"` → `"$1.$2.$3"` turns `240100` into release `24.1.0`, `"^([^;]+)(;\d+)?$"` → `"$1"`
   strips a `;1` suffix.
 - **`lists`** on the node: repeated entries shown as a table on its note, e.g. the columns and rows of a lookup
   table: `"lists": [{ "label": "Columns", "items": "Fields/Field" }, { "label": "Rows", "items": "Data/Row" }]`.

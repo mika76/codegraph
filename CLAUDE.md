@@ -22,7 +22,8 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
 - **Save tokens**: hand self-contained subtasks (searching/reading many files, checking parser output, reviewing
   the report) to a subagent on a cheaper model when that is good enough; keep design work here.
   Parallel agents that write code should use worktrees (builds lock `obj/`), then merge their branches.
-- **Public repo**: never put real company/product/table/folder names into tracked files (code, tests, docs);
+- **Public repo**: never put real company/product/table/folder names or our version numbers into tracked files
+  (code, comments, tests, docs, changelog);
   use neutral examples.
 
 ## Architecture (`src/CodeGraph`, tests in `tests/CodeGraph.Tests`)
