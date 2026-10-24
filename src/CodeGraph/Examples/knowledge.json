@@ -1,0 +1,15 @@
+// Your own facts and notes, layered on top of the code graph.
+// A fact is [subject, relation, object]. Subjects/objects that match a project, file, folder or DB object
+// link to it; anything else becomes a "concept" note. URLs become links on the subject's note.
+{
+  "facts": [
+    // ["Order Entry", "owned by", "Team Sales"],
+    // ["Orders", "is part of", "Ordering"],
+    // ["BillingService", "documented at", "https://wiki.example.com/billing"],
+  ],
+
+  // Text that should appear on a generated note
+  "notes": {
+    // "Orders": "Order_Status: 1 = placed, 2 = shipped. Never delete rows - audit requirement."
+  }
+}

@@ -1,0 +1,40 @@
+// codegraph configuration. Paths can be absolute or relative to this file.
+// (JSON with // comments and trailing commas allowed. Use forward slashes in paths.)
+{
+  // Where graph.json, GRAPH_REPORT.md and the parse cache go
+  "output": "./codegraph-out",
+
+  // Obsidian vault folder (created if missing). Generated notes are rewritten on every build;
+  // your own notes anywhere else in the vault are never touched. Remove to skip the vault.
+  "vault": "./vault",
+
+  // Your own knowledge, layered on top of the code
+  "releases": "./releases.json",
+  "releases_from_branches": true,   // a repo checked out on e.g. R2.4.0 -> its projects are part of release 2.4.0
+  "knowledge": ["./knowledge.json"],
+
+  // Name prefixes of your stored procedures: a string like "usp_Foo" that matches no DB object is then
+  // reported as "called from code but not found"
+  "proc_prefixes": ["sp", "usp", "proc"],
+
+  // Extra ignore patterns (on top of built-in ones: bin obj packages Debug Release node_modules dist Vendor
+  // ThirdParty, *.Designer.cs, vendored *.min.js/jQuery ...). A bare name matches any folder/file with that
+  // name; a path with "/" is matched from the repo root; "**/x" anywhere. Each repo may have a .codegraphignore.
+  "ignore": [
+    "Documentation",
+    // "SomeRepoFolder/generated",
+    // "**/wwwroot/js/pkg",
+  ],
+
+  // The repositories to scan (the name defaults to the folder name)
+  "repos": [
+    { "name": "MyApp", "path": "C:/src/MyApp" },
+    // { "name": "MyApi", "path": "C:/src/MyApi", "ignore": ["Tests/Fixtures"] },
+  ],
+
+  "obsidian": {
+    "folder": "",                  // put generated notes in a sub-folder of the vault, e.g. "Code Graph"
+    "max_routines_per_note": 400,
+    "graph_colors": true,
+  },
+}

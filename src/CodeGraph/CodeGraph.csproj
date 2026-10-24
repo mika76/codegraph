@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>codegraph</AssemblyName>
+    <RootNamespace>CodeGraph</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- `dotnet publish -r win-x64` (or linux-x64) produces a single native executable -->
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- reflection-based JSON (e.g. JsonArray.Add<T>) silently fails in the native build -->
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL3050</WarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="CodeGraph.Tests" />
+    <None Include="Examples\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

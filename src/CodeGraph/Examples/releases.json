@@ -1,0 +1,21 @@
+// Which modules shipped in which release.
+// Repos checked out on a release branch (e.g. R2.4.0) are added automatically (releases_from_branches).
+// Module names match project names (VB6 Title/Name, .NET assembly, exe/dll name, npm package name),
+// top-level folders (e.g. Database) or DB objects. Unknown names are kept and reported.
+// Tip:  codegraph release-snapshot 2.5   appends an entry with every project's current version
+// (note: that rewrites this file, so comments in it are lost).
+{
+  "releases": [
+    // {
+    //   "version": "2.3",
+    //   "date": "2026-10-20",
+    //   "status": "released",
+    //   "notes": "Order export fix",
+    //   "modules": {
+    //     "Order Entry": "2.3.0",
+    //     "BillingService": "2.3.0.0",
+    //     "Database": "20300"
+    //   }
+    // }
+  ]
+}

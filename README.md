@@ -1,0 +1,240 @@
+# codegraph
+
+**A map of how your code fits together - across repositories, languages and the database.**
+
+codegraph reads all your repositories and builds one graph of who calls what: which screens use which tables,
+which front-end calls hit which API action, which installer ships which DLL, which apps break if you change a
+stored procedure. You browse it as an [Obsidian](https://obsidian.md) vault, ask it from the command line, or let an
+AI assistant such as Claude Code use it to answer questions about your code.
+
+It was built for the kind of codebase most tools give up on: VB6 forms next to C# services, T-SQL scripts, C++ DLLs,
+WiX installers, a Vue front end and an ASP.NET API, spread over several repos.
+
+```text
+> codegraph impact sp_Get_Customer
+
+Impact of changing sp_Get_Customer (db_proc)  [Database/Procedures/dbo.sp_Get_Customer.sql:5] (up to 3 steps): 41 things
+
+(database)
+   db_proc: sp_Order_Place
+Order Entry
+   ORDER ENTRY/frmCustomer.frm
+   Shared/modUtils.bas
+Shop.Api.Customers
+   Shop.Api.Customers/Repositories/CustomerRepository.cs
+   Shop.Api.Customers/Controllers/CustomerController.cs
+StaffApp
+   src/api/customers.ts
+...
+```
+
+## Why use it
+
+- **Know what breaks before you change it.** `impact` lists every routine, screen, API, report and app that
+  depends on a table, procedure, class or file - directly or a few steps away - grouped by application.
+- **See across language boundaries.** SQL embedded in VB6 or C# strings is linked to the real tables; a
+  `fetch('/orders/42')` in a Vue component is linked to the C# controller action that serves it; a VB6 `Declare`
+  is linked to the function in your own C++ DLL; an installer is linked to the projects whose output it ships.
+- **Get new people up to speed.** Every project, file, table and procedure gets a note with what it contains, what
+  it uses and what uses it. Obsidian's graph view and backlinks make the structure explorable.
+- **Find dead weight.** The report lists tables and procedures nothing seems to use, source files that are in no
+  project, project files that reference missing files, and procedures called from code that don't exist.
+- **Track releases.** Record which module versions shipped in which release (or let release branch names do it),
+  and every project note shows its history.
+- **Stays on your machine.** No AI calls, no uploads, no server. One native executable; a full scan of a few
+  thousand files takes well under a minute, and later runs only re-read changed files (seconds).
+- **Deterministic and honest.** The same code always gives the same graph. When a name could mean two things the
+  link is skipped rather than guessed, so what you see is there.
+
+## Getting started
+
+You need Windows and the [.NET SDK 10](https://dotnet.microsoft.com/download) or newer. To build the native exe
+you also need Visual Studio (or the Build Tools) with the **Desktop development with C++** workload.
+
+1. **Get the tool and build it**
+
+   ```powershell
+   git clone https://github.com/mika76/codegraph.git
+   cd codegraph
+   .\publish.ps1            # -> publish\codegraph.exe (x64 or ARM64, whichever this PC is)
+   ```
+
+   No C++ workload? Run it through .NET instead: `dotnet run --project src\CodeGraph -c Release -- <command>`.
+
+2. **Create your config**
+
+   ```powershell
+   .\publish\codegraph.exe init     # writes codegraph.json, releases.json, knowledge.json
+   ```
+
+   Edit `codegraph.json`: list your repositories and where the Obsidian vault should go.
+
+   ```jsonc
+   {
+     "vault": "C:/src/CodeGraphVault",
+     "repos": [
+       { "name": "Shop", "path": "C:/src/Shop" },
+       { "name": "Api",  "path": "C:/src/Api" },
+       { "name": "Web",  "path": "C:/src/Web" },
+     ],
+   }
+   ```
+
+   These three files are yours and are not committed (they're in `.gitignore`).
+
+3. **Build the graph**
+
+   ```powershell
+   .\publish\codegraph.exe build
+   ```
+
+   It prints what it found and writes `codegraph-out\graph.json`, `codegraph-out\GRAPH_REPORT.md` and the vault.
+
+4. **Look around.** In Obsidian choose *Open folder as vault*, pick the vault folder and start at **Home**.
+   Skim the **Codegraph Report** first: it shows how much was linked and anything that looks wrong (e.g. a
+   generated or vendored folder that should be ignored - add it to `"ignore"` in `codegraph.json` and build again).
+
+5. **Ask questions**
+
+   ```powershell
+   .\publish\codegraph.exe show Orders              # a table/project/file/routine and all its connections
+   .\publish\codegraph.exe impact Orders            # everything that depends on it, grouped by app
+   .\publish\codegraph.exe path frmMain Orders      # how two things are connected
+   ```
+
+   If a name matches several things (there are often many `frmMain`), the tool lists them; repeat with the path or
+   id it shows.
+
+## Everyday use
+
+| When | Run |
+|---|---|
+| After pulling or changing code | `codegraph build` (only changed files are re-read) |
+| Something looks stale or a parser changed | `codegraph build --full` |
+| Only the graph and report, no vault | `codegraph build --no-vault` |
+| "What uses X?" / "What breaks if I change X?" | `codegraph show X` / `codegraph impact X [--depth N]` |
+| "How does A reach B?" | `codegraph path A B` |
+| Cutting a release | `codegraph release-snapshot 2.5` (then edit `releases.json`) |
+
+### With Claude Code
+
+`claude-setup\install.ps1` installs three skills into this folder's `.claude`: `/graph-ask` (answer "who uses /
+what breaks" questions from the graph, then check the source), `/graph-build` (rebuild and review the report) and
+`/graph-release` (record releases). `graph.json` is plain JSON, so any other tool or script can read it too.
+
+## Adding your own knowledge
+
+**Releases** - `releases.json`. Repos checked out on a release branch like `R2.4.0` are added automatically.
+
+```jsonc
+{
+  "releases": [
+    {
+      "version": "2.3",
+      "date": "2026-10-20",
+      "notes": "Order export fix",
+      "modules": { "Order Entry": "2.3.0", "BillingService": "2.3.0.0", "Database": "20300" },
+    },
+  ],
+}
+```
+
+Module names match project names (VB6 Title/Name, .NET assembly, exe/dll name, npm package), top-level folders or
+DB objects. `codegraph release-snapshot 2.4` appends an entry with every project's *current* version; delete the
+modules that didn't ship. (It rewrites the file, so comments in it are lost.)
+
+**Facts and notes** - `knowledge.json`. Shown on the generated notes:
+
+```jsonc
+{
+  "facts": [
+    ["Order Entry", "owned by", "Team Sales"],                       // "Team Sales" becomes a concept note
+    ["BillingService", "documented at", "https://wiki.example.com/billing"],
+  ],
+  "notes": { "Orders": "Order_Status 1 = placed, 2 = shipped." },
+}
+```
+
+**Your own notes in the vault** - write them anywhere outside the generated folders (e.g. `Notes/`) and link with
+normal Obsidian links. The build never touches them.
+
+- Generated (don't edit, rewritten on every build): the folders `Areas`, `Code`, `Database`, `Libraries`,
+  `Projects`, `Releases`, `Solutions` and the notes `Home` and `Codegraph Report`. A build only rewrites or deletes
+  notes listed in `.codegraph-manifest.json`.
+- Note names: projects by name (`[[Order Entry]]`), DB objects by name (`[[Orders]]`, `[[sp_Get_Customer]]`), code
+  files by file name (`[[modUtils.bas]]`). When a file name repeats, link with its path:
+  `[[Code/Shop/ORDER ENTRY/frmMain.frm|Order Entry main form]]`. Typing `[[` in Obsidian autocompletes.
+- Routines have no note of their own; they're listed in their file's note, so link the file and name the routine.
+- Your links show up as **Backlinks** on the generated notes and in the graph view. Example `Notes/Order lifecycle.md`:
+
+  ```markdown
+  # Order lifecycle
+  Orders live in [[Orders]]. Placing goes through [[sp_Order_Place]], shipping through
+  [[sp_Order_Ship]]. Order Entry saves manual orders in [[modUtils.bas]] (SaveOrder). See also [[Order Entry]].
+  ```
+
+## What it understands
+
+**Languages:** VB6 (`.vbp .vbg .frm .bas .cls .ctl`), VB.NET, C# (`.cs .csproj .sln .slnx`), C/C++ (`.cpp .h
+.vcxproj .vcproj .dsp .def`), T-SQL (`.sql`, one or many objects per file, `.sqlproj`), PowerShell / batch,
+TypeScript / JavaScript (`.ts .tsx .js`, `package.json` as a project, `tsconfig` path aliases), Vue single-file
+components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`).
+
+**What it links:**
+- app/project → the files it is built from (`.vbp` / `.csproj` / `.vcxproj` member lists, shared `..\Shared` files,
+  SDK-style folders)
+- project → project (project references, your own OCX/COM/DLL components, code that crosses projects) and →
+  external libraries and packages
+- routine → routine calls, `New` / instantiation, inheritance, type usage; C# calls through an interface also link
+  to the implementing class
+- code → database: SQL inline in VB6/C#/PowerShell/JS strings, stored-procedure names in strings, ADO recordsets
+  that `.Update`/`.AddNew`
+- stored procedure / view / function / trigger → the tables they read, write and execute; table → table foreign keys
+- VB6 `Declare ... Lib "X.dll"` → the function in your own X.dll project
+- TS/JS/Vue: imports (relative, `@/`, tsconfig `paths`, lazy `import()`, re-exports), calls through imports,
+  components used in `<template>`, imports of your own npm packages into their source
+- front end → back end: `api.get('/orders')`, `fetch`, `$.ajax({url})` in TS/JS/Vue/Razor → the C# controller
+  action serving that route (`[Route]`/`[HttpGet]` attributes or MVC `/Controller/Action`)
+- MVC: controller action → its view, `@model` types, partials
+- installers: which projects/files and third-party binaries each installer ships, features, services, custom actions
+- releases from git branch names and from `releases.json`
+
+## Configuration
+
+`codegraph.json` is JSON with `//` comments and trailing commas allowed; paths are relative to the file.
+
+| Setting | Meaning |
+|---|---|
+| `repos` | `{ "name", "path", "ignore": [...] }` for each repository |
+| `vault` | Obsidian vault folder (leave out to skip the vault) |
+| `output` | where `graph.json`, the report and the parse cache go (default `./codegraph-out`) |
+| `ignore` | extra ignore patterns for all repos |
+| `releases`, `releases_from_branches`, `knowledge` | your own knowledge files (see above) |
+| `proc_prefixes` | your stored procedure name prefixes, e.g. `["sp", "usp"]` |
+| `external_ignore_extra` | library names not to show as external dependencies |
+| `obsidian` | `folder` (sub-folder for generated notes), `max_routines_per_note`, `graph_colors` |
+
+**Ignoring things.** Built in: `bin obj packages node_modules Debug Release .vs`, `Vendor`/`ThirdParty` folders,
+`*.Designer.cs`, `Reference.cs`, vendored `*.min.js`/jQuery etc. Only code file types are read at all (no images,
+docs or binaries). Add patterns in `"ignore"` or in a `.codegraphignore` file in a repo root (an existing
+`.graphifyignore` is also read). A bare name (`Documentation`) matches any folder/file with that name; a path with
+`/` is matched from the repo root; `**/x` matches anywhere; `!pattern` re-includes.
+
+## Limits
+
+Parsing uses text patterns, not a compiler - that's what makes it fast and able to read VB6 and SQL scripts, but:
+- Calls through untyped variables (VB6 `Object`/`Variant`, late binding, reflection) aren't followed.
+- SQL or URLs assembled from many runtime pieces may be missed. Only names that exist in your code are linked.
+- Same-named routines: matching prefers the same file, then the same project, then the projects it references.
+  Matches that remain ambiguous are skipped rather than guessed (the report counts them).
+- Built and tested on Windows; other platforms are untested.
+
+## Development
+
+```powershell
+dotnet test CodeGraph.slnx       # unit tests
+.\publish.ps1                    # native exe
+```
+
+The code is in `src/CodeGraph` (C#, no runtime dependencies, Native AOT). `CLAUDE.md` describes the architecture:
+scanning, the parsers, how references are resolved, and the outputs.

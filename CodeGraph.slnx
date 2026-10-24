@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/CodeGraph/CodeGraph.csproj" />
+  <Project Path="tests/CodeGraph.Tests/CodeGraph.Tests.csproj" />
+</Solution>

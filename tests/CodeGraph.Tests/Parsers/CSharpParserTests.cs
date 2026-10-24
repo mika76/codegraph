@@ -1,0 +1,139 @@
+using System.Text.Json.Nodes;
+using CodeGraph.Model;
+using CodeGraph.Parsers;
+
+namespace CodeGraph.Tests;
+
+public class CSharpParserTests
+{
+    private const string Controller = """
+        using System;
+        using static Foo.Bar;
+        using Alias = Baz.Qux;
+        [assembly: AssemblyVersion("1.2.3")]
+        namespace Shop.Api.Controllers
+        {
+            [Route("/inventory")]
+            public class SlotController : ControllerBase, ISlot<int>
+            {
+                private readonly IItemRepository _repo;
+                public SlotController(IItemRepository repo) { _repo = repo; }
+
+                [HttpGet][Route("/inventory/items")]
+                public IActionResult Items(int id)
+                {
+                    var data = _repo.GetAll(id);
+                    var r = new Result();
+                    return Ok(data);
+                }
+
+                [HttpPost("save")]
+                public void Save() { }
+
+                [HttpPost("save")]
+                public void Save(int x) { }
+
+                [NonAction]
+                public void Hidden() { }
+
+                private void Helper() { Items(1); }
+
+                public string Sql() => "SELECT * FROM Orders WHERE Id = 1";
+            }
+        }
+        """;
+
+    private static Symbol Sym(FileFacts f, string name) => f.Symbols.First(s => s.Name == name);
+
+    [Fact]
+    public void Types_namespace_usings_attrs()
+    {
+        var f = CSharpParser.Parse("a.cs", Controller);
+        Assert.Equal("csharp", f.Lang);
+        Assert.Equal("Shop.Api.Controllers", f.X["namespace"]!.GetValue<string>());
+        Assert.Equal(["Baz.Qux", "Foo.Bar", "System"], f.X["usings"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Equal("1.2.3", f.X["attrs"]!["assemblyversion"]!.GetValue<string>());
+        var t = Sym(f, "SlotController");
+        Assert.Equal("class", t.Kind);
+        Assert.Equal(["ControllerBase", "ISlot"], t.X["bases"]!.AsArray().Select(x => x!.GetValue<string>()));
+        Assert.Contains(f.Refs, r => r is { Kind: "inherit", Name: "ISlot", FromParent: "SlotController" });
+    }
+
+    [Fact]
+    public void Attribute_routes()
+    {
+        var f = CSharpParser.Parse("a.cs", Controller);
+        var m = Sym(f, "Items");
+        Assert.Equal("method", m.Kind);
+        Assert.Equal("SlotController", m.Parent);
+        var route = m.X["routes"]!.AsArray().Single()!;
+        Assert.Equal("get", route["verb"]!.GetValue<string>());
+        Assert.Equal("inventory/items", route["path"]!.GetValue<string>());
+        Assert.False(route["conventional"]!.GetValue<bool>());
+
+        var save = Sym(f, "Save");
+        Assert.Equal(2, save.X["overloads"]!.GetValue<int>());
+        var routes = save.X["routes"]!.AsArray();
+        Assert.Equal(2, routes.Count);
+        Assert.Equal("inventory/save", routes[0]!["path"]!.GetValue<string>());
+
+        Assert.Null(Sym(f, "Hidden").X["routes"]);
+        Assert.Null(Sym(f, "Helper").X["routes"]);
+        Assert.Equal("SlotController", f.Symbols.Single(s => s.Kind == "constructor").Parent);
+    }
+
+    [Fact]
+    public void Conventional_route_for_mvc_controller()
+    {
+        var f = CSharpParser.Parse("h.cs", "public class HomeController : Controller { public ActionResult Index() { return View(); } }");
+        var r = Sym(f, "Index").X["routes"]!.AsArray().Single()!;
+        Assert.Equal("home/index", r["path"]!.GetValue<string>());
+        Assert.True(r["conventional"]!.GetValue<bool>());
+        Assert.Null(r["verb"]);
+    }
+
+    [Fact]
+    public void Member_call_types_and_sql()
+    {
+        var f = CSharpParser.Parse("a.cs", Controller);
+        Assert.Contains(f.Refs, r => r is { Kind: "member", Qual: "_repo", Name: "GetAll", QualType: "IItemRepository", From: "Items" });
+        Assert.Contains(f.Refs, r => r is { Kind: "new", Name: "Result", From: "Items" });
+        Assert.Contains(f.Refs, r => r is { Kind: "call", Name: "Items", From: "Helper" });
+        Assert.Contains(f.Refs, r => r is { Kind: "sql", Mode: "read", Name: "orders", From: "Sql" });
+        Assert.Contains(f.Refs, r => r is { Kind: "type", Name: "IItemRepository", FromParent: "SlotController", From: null });
+    }
+
+    [Fact]
+    public void Nested_types_and_enum_and_interface()
+    {
+        const string src = """
+            namespace N;
+            public interface IFoo { void Do(); }
+            public class Outer { public class Inner { public void M() {} } }
+            public enum Color { Red, Green }
+            public record Point(int X, int Y);
+            public record class Rec(int A) : Base { }
+            """;
+        var f = CSharpParser.Parse("a.cs", src);
+        Assert.Equal("N", f.X["namespace"]!.GetValue<string>());
+        Assert.Equal("interface", Sym(f, "IFoo").Kind);
+        Assert.Equal("public", Sym(f, "Do").Visibility);
+        Assert.Equal("Outer.Inner", Sym(f, "Outer.Inner").Name);
+        Assert.Equal("Outer.Inner", Sym(f, "M").Parent);
+        Assert.Equal("enum", Sym(f, "Color").Kind);
+        Assert.Equal("record", Sym(f, "Rec").Kind);
+        Assert.Contains(f.Refs, r => r is { Kind: "inherit", Name: "Base" });
+    }
+
+    [Fact]
+    public void Literal_identifier_and_line_numbers()
+    {
+        const string src = "class A\n{\n    void M()\n    {\n        Run(\"bill___Customer_Get\");\n    }\n}\n";
+        var f = CSharpParser.Parse("a.cs", src);
+        var m = Sym(f, "M");
+        Assert.Equal(3, m.Line);
+        Assert.Equal(4, m.Lines);
+        Assert.Contains(f.Refs, r => r is { Kind: "literal", Name: "bill___customer_get", Line: 5, From: "M" });
+        Assert.Equal(8, f.Loc);
+    }
+}
