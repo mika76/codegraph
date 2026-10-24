@@ -29,7 +29,7 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
   in-house XML/JSON files (report definitions, patch lists, mappings) into nodes and links - see
   [extractors](design/extractors.md). Not built: an "external command" escape hatch, only if a format turns up that
   rules can't describe.
-- **Enums and constants** (M). VB6 `Enum` blocks; enum members (VB6, VB.NET, C#, TS) and constants (VB6 `Const`,
+- [x] **Enums and constants** (built, in the next release). VB6 `Enum` blocks; enum members (VB6, VB.NET, C#, TS) and constants (VB6 `Const`,
   C# `const`) as nodes with their values, linked from the code that uses them (`uses_value`) - including VB6's
   unqualified enum members - so "who uses `OrderStatus.Shipped`?" works, and SQL kept in a constant links its
   tables to the code that uses the constant.

@@ -321,11 +321,13 @@ public static partial class Obsidian
             var n = N(nid);
             var o = new List<string>();
             var rel = new List<string>();
+            // extractor items and referenced files list their links themselves
+            bool ownLinks = n.Str("extractor") is not null || n.Kind == "file_ref";
             foreach (var e in _v.OutOf(nid))
-                if (Truthy(e.Data["custom"]))
+                if (!ownLinks && Truthy(e.Data["custom"]))
                     rel.Add($"- **{EdgeLabel(e)}** -> {Link(e.Target)}{NoteSuffix(e)}");
             foreach (var e in _v.InOf(nid))
-                if (Truthy(e.Data["custom"]))
+                if (!ownLinks && Truthy(e.Data["custom"]))
                     rel.Add($"- {Link(e.Source)} **{EdgeLabel(e)}** -> this{NoteSuffix(e)}");
             if (rel.Count > 0) { o.AddRange(["## Other relations", ""]); o.AddRange(rel); o.Add(""); }
             if (n.Data["links"] is JsonArray la)

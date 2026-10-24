@@ -48,7 +48,7 @@ public sealed class ExtractorList
     public string Items { get; set; } = "";
     /// <summary>Path (relative to an entry) of its values, joined into one line (default: all attributes).</summary>
     public string Values { get; set; } = "@*";
-    public string Separator { get; set; } = " | ";
+    public string Separator { get; set; } = " · ";
 }
 
 public sealed class ExtractorLink

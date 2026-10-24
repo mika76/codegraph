@@ -61,7 +61,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
 `db:<object>`, `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
-uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, reads, writes,
+uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, uses_value, reads, writes,
 executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in.
 
 ## Working on the tool

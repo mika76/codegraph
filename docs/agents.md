@@ -90,9 +90,10 @@ It has three parts:
 - **Common node fields**: `kind`, `name`, `repo`, `path` (files, projects), `file` + `line` (symbols, DB objects),
   `lang`, `signature`, `projects` (files: the projects that build them), `routes` (controller actions).
 - **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `calls_native`, `includes`,
-  `imports`, `uses_component`, `calls_api`, `renders`, `mentions`, `reads`, `writes`, `executes`, `references`
-  (foreign key), `triggers_on`, `defines`, `alters`, `depends_on`, `uses_library`, `uses_code_of`, `ships`,
-  `released_in`. `count` is how often it occurs; `line` the first place; `via` extra detail (e.g. `recordset`,
+  `imports`, `uses_component`, `calls_api`, `renders`, `mentions`, `uses_value` (enum members, constants),
+  `reads`, `writes`, `executes`, `references` (foreign key), `triggers_on`, `defines`, `alters`, `depends_on`,
+  `uses_library`, `uses_code_of`, `ships`, `released_in`, and for your own formats `defined_in`, `opens` and
+  whatever relations your extractors name. `count` is how often it occurs; `line` the first place; `via` extra detail (e.g. `recordset`,
   `implementation`, the raw URL of an API call).
 
 Example - every routine that writes to the `Orders` table, in PowerShell:

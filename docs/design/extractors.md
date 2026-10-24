@@ -80,6 +80,9 @@ so `impact Orders` lists the report, `show BusinessDay` lists every report that 
 - **`pattern` / `replace`** on a link: a regex each value must match (others are skipped), optionally rewriting
   it - e.g. `"^(\d\d)(\d\d)(\d\d)$"` → `"$1.$2.$3"` turns `353800` into release `35.38.0`, `"^([^;]+)(;\d+)?$"` → `"$1"`
   strips a `;1` suffix.
+- **`lists`** on the node: repeated entries shown on its note, e.g. the rows of a lookup table:
+  `"lists": [{ "label": "Rows", "items": "Data/Row", "values": "@*", "separator": " · " }]` - each entry becomes one
+  line of its values (default: all attributes), up to 500 per list.
 - **`files`** patterns work like the ignore rules (bare name anywhere, `/` from the repo root, `!` excludes).
   Files an extractor reads are not subject to `max_file_kb`.
 - **`uses_file` to files that aren't scanned** (binary `.rpt`, images): a lightweight `file_ref` node with the name,
