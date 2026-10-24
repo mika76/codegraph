@@ -46,9 +46,8 @@ public sealed class ExtractorList
     public string Label { get; set; } = "";
     /// <summary>Path (relative to the item) of the entries, e.g. "Data/Row".</summary>
     public string Items { get; set; } = "";
-    /// <summary>Path (relative to an entry) of its values, joined into one line (default: all attributes).</summary>
+    /// <summary>Path (relative to an entry) of its fields; each becomes a column named after the attribute/element (default: all attributes).</summary>
     public string Values { get; set; } = "@*";
-    public string Separator { get; set; } = " · ";
 }
 
 public sealed class ExtractorLink

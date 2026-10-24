@@ -756,7 +756,13 @@ public static partial class Obsidian
             if (n.Data["lists"] is JsonObject lists)
                 foreach (var (label, entries) in lists)
                     if (entries is JsonArray ea)
-                        listSections.Add((label, ea.Select(x => $"- {LabelOf(x?.ToString() ?? "")}").ToList()));
+                    {
+                        // a table: the entries' field names (first seen first) are the columns
+                        var rowsO = ea.OfType<JsonObject>().ToList();
+                        var cols = rowsO.SelectMany(r => r.Select(kv => kv.Key)).Distinct().Take(15).ToArray();
+                        var cells = rowsO.Select(r => cols.Select(c => (object?)(r[c]?.ToString() ?? "")).ToArray()).ToList();
+                        if (cols.Length > 0) listSections.Add((label, Table(cols.Select(c => Cell(c)).ToArray(), cells)));
+                    }
             string where = n.Str("file") is { } f ? $", defined in {Link(f)}" : "";
             string summary = $"{char.ToUpperInvariant(n.Kind[0]) + n.Kind[1..].Replace('_', ' ')} from the *{S(n, "extractor")}* extractor{where}.";
             return Note(n, n.Name, summary,

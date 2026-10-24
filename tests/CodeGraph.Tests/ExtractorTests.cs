@@ -76,13 +76,14 @@ public class ExtractorTests
         var x = new ExtractorConfig
         {
             Name = "lookup data", Files = ["data.xml"], Items = "/Tables/Table[@Name != 'Ui_Strings']",
-            Node = new ExtractorNode { Kind = "lookup_data", Name = "@Name", Lists = [new ExtractorList { Label = "Rows", Items = "Data/Row", Separator = " = " }] },
+            Node = new ExtractorNode { Kind = "lookup_table", Name = "@Name", Lists = [new ExtractorList { Label = "Rows", Items = "Data/Row" }] },
             Links = [new ExtractorLink { Relation = "seeds", Value = "@Name", To = "db" }],
         };
         var f = ExtractorParser.Parse("data.xml", xml, x);
         var item = Assert.Single(f.Extra!["items"]!.AsArray())!;
         Assert.Equal("Order_Status", item["name"]!.ToString());
-        Assert.Equal(["1 = Placed", "2 = Shipped"], item["lists"]!["Rows"]!.AsArray().Select(r => r!.ToString()));
+        var rows = item["lists"]!["Rows"]!.AsArray();
+        Assert.Equal(["1|Placed", "2|Shipped"], rows.Select(r => $"{r!["Id"]}|{r["Description"]}"));
     }
 
     [Fact]

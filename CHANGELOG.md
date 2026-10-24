@@ -18,7 +18,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🔗 `opens` links from code to extractor items: a string literal naming an item's file (or name) links the routine
   that contains it (`referenced_by`).
 - 🏷️ Releases can come from your own files (`"to": "release"`), merged with `releases.json` and release branches.
-- 📋 Extractor `lists`: repeated entries shown on an item's note, e.g. the rows of a lookup table.
+- 📋 Extractor `lists`: repeated entries shown as a table on an item's note, with the field names as columns - e.g.
+  the columns and rows of a lookup table.
 - 🔢 **Enums and constants**: VB6 `Enum` blocks; enum members (VB6, VB.NET, C#, TypeScript) and constants (VB6
   `Const`, C# `const`) are nodes with their values. Code that uses them gets a `uses_value` link - including VB6's
   unqualified enum members and public module constants (ambiguous names are skipped). SQL kept in a constant is

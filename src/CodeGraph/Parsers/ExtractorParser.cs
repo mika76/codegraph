@@ -70,10 +70,13 @@ public static class ExtractorParser
             foreach (var ls in x.Node.Lists)
             {
                 var entries = new JsonArray();
+                // each entry keeps its field names ({ "BVTT_ID": "1", "BVTT_Description": "Accept" }) for a table
                 foreach (var entry in item.Entries(ls.Items).Take(MaxListEntries))
                 {
-                    string line = string.Join(ls.Separator, entry.Values(ls.Values).Select(v => v.Value.Trim()).Where(v => v.Length > 0));
-                    if (line.Length > 0) entries.Add((JsonNode?)line);
+                    var row = new JsonObject();
+                    foreach (var (field, value) in entry.Fields(ls.Values))
+                        if (value.Trim().Length > 0 && !row.ContainsKey(field)) row[field] = value.Trim();
+                    if (row.Count > 0) entries.Add((JsonNode)row);
                 }
                 if (entries.Count > 0) lists[string.IsNullOrEmpty(ls.Label) ? ls.Items : ls.Label] = entries;
             }
@@ -118,6 +121,8 @@ public static class ExtractorParser
         IEnumerable<(string Value, int Line)> Values(string path);
         /// <summary>Sub-items selected by a path (for lists).</summary>
         IEnumerable<IReader> Entries(string path);
+        /// <summary>Values with the name of the attribute / element / property they came from.</summary>
+        IEnumerable<(string Field, string Value)> Fields(string path);
     }
 
     // ------------------------------------------------------------------ XML (XPath 1.0)
@@ -162,6 +167,19 @@ public static class ExtractorParser
 
         public IEnumerable<IReader> Entries(string path) =>
             Eval(context, path, ns).OfType<XElement>().Select(e => (IReader)new XmlReader(e, ns));
+
+        public IEnumerable<(string Field, string Value)> Fields(string path)
+        {
+            foreach (var o in Eval(context, path, ns))
+                switch (o)
+                {
+                    case XAttribute a: yield return (a.Name.LocalName, a.Value); break;
+                    case XElement e: yield return (e.Name.LocalName, e.Value); break;
+                    case XText t: yield return (t.Parent?.Name.LocalName ?? "text", t.Value); break;
+                    case string or double or bool:
+                        yield return ("value", Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture)!); break;
+                }
+        }
 
         private static IEnumerable<object> Eval(XElement context, string path, IXmlNamespaceResolver? ns)
         {
@@ -213,6 +231,20 @@ public static class ExtractorParser
 
         public IEnumerable<IReader> Entries(string path) =>
             Select(context, path).Select(n => (IReader)new JsonReader(n, text));
+
+        public IEnumerable<(string Field, string Value)> Fields(string path)
+        {
+            // "@*" / "*" on an object: its simple properties by name; otherwise the values, named after the path
+            if (path.Trim() is "@*" or "*" or "$.*" && context is JsonObject obj)
+            {
+                foreach (var (k, v) in obj)
+                    if (v is JsonValue jv)
+                        yield return (k, jv.TryGetValue(out string? s) ? s : jv.ToJsonString());
+                yield break;
+            }
+            string name = path.Split('.', StringSplitOptions.RemoveEmptyEntries).LastOrDefault()?.Trim('[', ']', '*', '@') ?? "value";
+            foreach (var (v, _) in Values(path)) yield return (name.Length > 0 ? name : "value", v);
+        }
 
         // JSON nodes have no positions: use the line of the first occurrence of the value in the text
         private int LineOf(string value)
