@@ -37,6 +37,18 @@ public sealed class ExtractorNode
     public string Name { get; set; } = "";
     /// <summary>Display attributes: label -> path.</summary>
     public Dictionary<string, string> Attrs { get; set; } = [];
+    /// <summary>Repeated entries shown on the note, e.g. the rows of a lookup table.</summary>
+    public List<ExtractorList> Lists { get; set; } = [];
+}
+
+public sealed class ExtractorList
+{
+    public string Label { get; set; } = "";
+    /// <summary>Path (relative to the item) of the entries, e.g. "Data/Row".</summary>
+    public string Items { get; set; } = "";
+    /// <summary>Path (relative to an entry) of its values, joined into one line (default: all attributes).</summary>
+    public string Values { get; set; } = "@*";
+    public string Separator { get; set; } = " | ";
 }
 
 public sealed class ExtractorLink

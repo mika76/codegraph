@@ -31,7 +31,8 @@ public sealed partial class Builder
                 {
                     _g.Node(id, ("kind", kind), ("name", name), ("extractor", XStr(r.Facts.Extra, "extractor")),
                         ("file", r.Id), ("repo", r.Repo), ("line", it["line"]?.DeepClone()), ("attrs", it["attrs"]),
-                        ("files", it["files"] is JsonArray { Count: > 0 } fs ? fs : null));
+                        ("files", it["files"] is JsonArray { Count: > 0 } fs ? fs : null),
+                        ("lists", it["lists"] is JsonObject { Count: > 0 } ls ? ls : null));
                     GetOrAdd(_itemsByName, name.ToLowerInvariant()).Add(id);
                     Inc(_stats, $"items_{kind}");
                 }

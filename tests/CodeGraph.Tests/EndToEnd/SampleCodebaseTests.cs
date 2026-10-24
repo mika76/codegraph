@@ -164,6 +164,15 @@ public sealed class SampleCodebaseTests : IDisposable
     }
 
     [Fact]
+    public void Enum_values_and_constants_are_linked_from_the_form()
+    {
+        const string ship = "sym:Shop:OrderEntry/frmOrder.frm#frmOrder.cmdShip_Click";
+        Assert.NotNull(_g.GetEdge(ship, "sym:Shop:Shared/modDb.bas#OrderStatus.osShipped", "uses_value"));
+        Assert.NotNull(_g.GetEdge(ship, "sym:Shop:Shared/modDb.bas#modDb.MAX_ORDER_LINES", "uses_value"));
+        Assert.Equal("2", _g.GetNode("sym:Shop:Shared/modDb.bas#OrderStatus.osShipped")!.Str("value"));
+    }
+
+    [Fact]
     public void Vault_has_notes_and_second_run_writes_nothing()
     {
         var first = Obsidian.WriteVault(_g, _cfg, _report);

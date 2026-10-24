@@ -29,3 +29,8 @@ End Sub
 Private Sub cmdReport_Click()
     ShowReport "Order Summary"
 End Sub
+
+Private Sub cmdShip_Click()
+    If lstLines.ListCount > MAX_ORDER_LINES Then Exit Sub
+    m_status = osShipped
+End Sub

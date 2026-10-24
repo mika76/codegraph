@@ -66,10 +66,21 @@ public static class ExtractorParser
                     if (l.Relation == "uses_file") files.Add((JsonNode?)v);
                 }
             }
+            var lists = new JsonObject();
+            foreach (var ls in x.Node.Lists)
+            {
+                var entries = new JsonArray();
+                foreach (var entry in item.Entries(ls.Items).Take(MaxListEntries))
+                {
+                    string line = string.Join(ls.Separator, entry.Values(ls.Values).Select(v => v.Value.Trim()).Where(v => v.Length > 0));
+                    if (line.Length > 0) entries.Add((JsonNode?)line);
+                }
+                if (entries.Count > 0) lists[string.IsNullOrEmpty(ls.Label) ? ls.Items : ls.Label] = entries;
+            }
             list.Add((JsonNode)new JsonObject
             {
                 ["id"] = id, ["kind"] = x.Node.Kind, ["name"] = name, ["line"] = nameVal.Line,
-                ["attrs"] = attrs, ["links"] = links, ["files"] = files,
+                ["attrs"] = attrs, ["links"] = links, ["files"] = files, ["lists"] = lists,
             });
         }
         facts.X["extractor"] = x.Name;
@@ -100,9 +111,13 @@ public static class ExtractorParser
     }
 
     /// <summary>One item of a document: evaluates paths relative to it.</summary>
+    private const int MaxListEntries = 500;
+
     private interface IReader
     {
         IEnumerable<(string Value, int Line)> Values(string path);
+        /// <summary>Sub-items selected by a path (for lists).</summary>
+        IEnumerable<IReader> Entries(string path);
     }
 
     // ------------------------------------------------------------------ XML (XPath 1.0)
@@ -144,6 +159,9 @@ public static class ExtractorParser
                     case double or bool: yield return (Convert.ToString(o, System.Globalization.CultureInfo.InvariantCulture)!, LineOf(context)); break;
                 }
         }
+
+        public IEnumerable<IReader> Entries(string path) =>
+            Eval(context, path, ns).OfType<XElement>().Select(e => (IReader)new XmlReader(e, ns));
 
         private static IEnumerable<object> Eval(XElement context, string path, IXmlNamespaceResolver? ns)
         {
@@ -192,6 +210,9 @@ public static class ExtractorParser
                 yield return (v, LineOf(v));
             }
         }
+
+        public IEnumerable<IReader> Entries(string path) =>
+            Select(context, path).Select(n => (IReader)new JsonReader(n, text));
 
         // JSON nodes have no positions: use the line of the first occurrence of the value in the text
         private int LineOf(string value)

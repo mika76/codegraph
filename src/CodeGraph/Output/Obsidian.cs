@@ -529,6 +529,18 @@ public static partial class Obsidian
             }
             var rl = routines.Take(_maxRoutines).Select(s => RoutineLine(fid, s)).ToList();
             if (routines.Count > _maxRoutines) rl.Add($"- ... {routines.Count - _maxRoutines} more routines not listed");
+            // enum members and constants with their value and who uses them
+            var values = syms.Where(s => N(s).Kind is "enum_member" or "constant").ToList();
+            var vl = values.Take(_maxRoutines).Select(s =>
+            {
+                var sn = N(s);
+                var users = v.InOf(s).Where(e => e.Relation == "uses_value").Select(e => e.Source).Distinct().ToList();
+                string used = users.Count == 0 ? "" : " - used by " + string.Join(", ", users.Take(8).Select(u => Link(u)))
+                                                      + (users.Count > 8 ? $" and {users.Count - 8} more" : "");
+                string value = sn.Str("value") is { Length: > 0 } val ? $" = `{val.Replace("`", "'")}`" : "";
+                return $"- **{LabelOf(First(sn.Str("qual"), sn.Name))}**{value}{used}";
+            }).ToList();
+            if (values.Count > _maxRoutines) vl.Add($"- ... {values.Count - _maxRoutines} more not listed");
             var extra = new Extra().Set("loc", n.Data["loc"]).Set("area", n.Data["area"]).Set("projects", pj.Select(p => N(p).Name).ToList());
             if (n.Data["attrs"] is JsonObject attrs)
                 foreach (var key in new[] { "assemblyversion", "fileversion", "version" })
@@ -561,7 +573,7 @@ public static partial class Obsidian
                 ("Projects", proj), ("Details", det.Where(d => d.Length > 0).ToList()), ("Types defined", tl),
                 ("Ships", shipsL), ("Uses code in", v.FileOut.TryGetValue(fid, out var fo) ? Counted(fo) : []),
                 ("Used by", v.FileIn.TryGetValue(fid, out var fi) ? Counted(fi) : []),
-                ("Database", DropLast(db)), ("Routines", rl),
+                ("Database", DropLast(db)), ("Routines", rl), ("Constants and enum values", vl),
                 ("Released in", Table(["Release", "Date", "Version"], Released(fid))),
             ], extra);
         }
@@ -738,10 +750,15 @@ public static partial class Obsidian
                 .SelectMany(gr => gr.Select(e => $"- **{gr.Key}** {Link(e.Target)}").Order(Ord)).ToList();
             var inLinks = _v.InOf(nid).GroupBy(e => e.Relation).OrderBy(gr => gr.Key, Ord)
                 .SelectMany(gr => gr.Select(e => $"- {Link(e.Source)} **{gr.Key}**").Order(Ord)).ToList();
+            var listSections = new List<(string, List<string>)>();
+            if (n.Data["lists"] is JsonObject lists)
+                foreach (var (label, entries) in lists)
+                    if (entries is JsonArray ea)
+                        listSections.Add((label, ea.Select(x => $"- {LabelOf(x?.ToString() ?? "")}").ToList()));
             string where = n.Str("file") is { } f ? $", defined in {Link(f)}" : "";
             string summary = $"{char.ToUpperInvariant(n.Kind[0]) + n.Kind[1..].Replace('_', ' ')} from the *{S(n, "extractor")}* extractor{where}.";
             return Note(n, n.Name, summary,
-                [("Details", details), ("Links", outLinks), ("Used by", inLinks), ("Also defined in", also)]);
+                [("Details", details), .. listSections, ("Links", outLinks), ("Used by", inLinks), ("Also defined in", also)]);
         }
 
         private string FileRef(string nid, Node n)

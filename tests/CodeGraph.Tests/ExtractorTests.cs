@@ -63,6 +63,29 @@ public class ExtractorTests
     }
 
     [Fact]
+    public void Lists_turn_repeated_elements_into_lines()
+    {
+        const string xml = """
+            <Tables>
+              <Table Name="Order_Status">
+                <Data><Row Id="1" Description="Placed" /><Row Id="2" Description="Shipped" /></Data>
+              </Table>
+              <Table Name="Ui_Strings"><Data><Row Id="1" Text="Hello" /></Data></Table>
+            </Tables>
+            """;
+        var x = new ExtractorConfig
+        {
+            Name = "lookup data", Files = ["data.xml"], Items = "/Tables/Table[@Name != 'Ui_Strings']",
+            Node = new ExtractorNode { Kind = "lookup_data", Name = "@Name", Lists = [new ExtractorList { Label = "Rows", Items = "Data/Row", Separator = " = " }] },
+            Links = [new ExtractorLink { Relation = "seeds", Value = "@Name", To = "db" }],
+        };
+        var f = ExtractorParser.Parse("data.xml", xml, x);
+        var item = Assert.Single(f.Extra!["items"]!.AsArray())!;
+        Assert.Equal("Order_Status", item["name"]!.ToString());
+        Assert.Equal(["1 = Placed", "2 = Shipped"], item["lists"]!["Rows"]!.AsArray().Select(r => r!.ToString()));
+    }
+
+    [Fact]
     public void Missing_name_is_an_error()
     {
         Assert.Throws<FormatException>(() => ExtractorParser.Parse("x.xml", "<Other/>", Reports()));
