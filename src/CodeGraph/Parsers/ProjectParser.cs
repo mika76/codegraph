@@ -26,6 +26,7 @@ public static partial class ProjectParser
     [GeneratedRegex("^#\\s*TARGTYPE\\s+\"([^\"]+)\"", Cv | RegexOptions.Multiline)] private static partial Regex DspTarg();
     [GeneratedRegex("^#\\s*Name\\s+\"([^\"]+?)(?:\\s+-\\s+.*)?\"", Cv | RegexOptions.Multiline)] private static partial Regex DspName();
     [GeneratedRegex(@"^SOURCE=(.+)$", Cv | RegexOptions.Multiline)] private static partial Regex DspSource();
+    [GeneratedRegex(@"^#\s*ADD\s+(?:LINK32|LIB32)\b.*?/out:(?:""([^""]+)""|(\S+))", Cv)] private static partial Regex DspOut();
     [GeneratedRegex(@"[\\/]", Cv)] private static partial Regex Sep();
 
     public static FileFacts Parse(string path, string text)
@@ -324,9 +325,39 @@ public static partial class ProjectParser
         m = DspName().Match(text);
         if (m.Success) p.Name = m.Groups[1].Value.Trim();
         p.Output = p.Name + BinExt(p.Type);
+        // the linker's /out: names the real output (e.g. an ActiveX control linked as "../Controls/Grid.ocx")
+        if (DspOutFile(text) is { } outFile)
+        {
+            p.Output = outFile;
+            if (outFile.EndsWith(".ocx", StringComparison.OrdinalIgnoreCase)) p.Type = "ocx";
+        }
         foreach (Match sm in DspSource().Matches(text))
             p.Members.Add(Unquote(sm.Groups[1].Value.Trim()));
         return p;
+    }
+
+    /// <summary>File name from "# ADD LINK32/LIB32 ... /out:..." - the Release configuration's if there is one, else the first.</summary>
+    private static string? DspOutFile(string text)
+    {
+        string? first = null, release = null;
+        bool inRelease = false;
+        foreach (var raw in text.Split('\n'))
+        {
+            string line = raw.Trim();
+            if (line.StartsWith("!IF", StringComparison.OrdinalIgnoreCase) || line.StartsWith("!ELSEIF", StringComparison.OrdinalIgnoreCase))
+                inRelease = line.Contains("Release", StringComparison.OrdinalIgnoreCase);
+            else if (line.StartsWith("!ENDIF", StringComparison.OrdinalIgnoreCase))
+                inRelease = false;
+            var om = DspOut().Match(line);
+            if (!om.Success) continue;
+            string path = om.Groups[1].Success ? om.Groups[1].Value : om.Groups[2].Value;
+            if (path.Contains("$(")) continue;
+            string name = path.Replace('\\', '/').Split('/')[^1].Trim();
+            if (name.Length == 0) continue;
+            first ??= name;
+            if (inRelease) release ??= name;
+        }
+        return release ?? first;
     }
 
     private static ProjectInfo Wixproj(string stem, string text)

@@ -115,4 +115,34 @@ public class ProjectParserTests
         Assert.NotNull(p.Error);
         Assert.Empty(p.Members);
     }
+
+    [Fact]
+    public void Dsp_output_comes_from_the_release_linker_out()
+    {
+        const string dsp = """
+            # Microsoft Developer Studio Project File - Name="GridCtl" - Package Owner=<4>
+            # TARGTYPE "Win32 (x86) Dynamic-Link Library" 0x0102
+            !IF  "$(CFG)" == "GridCtl - Win32 Release"
+            # ADD LINK32 kernel32.lib /nologo /subsystem:windows /dll /machine:I386 /out:"../../Controls/GridCtl.ocx"
+            !ELSEIF  "$(CFG)" == "GridCtl - Win32 Debug"
+            # ADD LINK32 kernel32.lib /nologo /dll /debug /out:"Debug/GridCtlD.ocx"
+            !ENDIF
+            # Name "GridCtl - Win32 Release"
+            SOURCE=.\GridCtl.cpp
+            """;
+        var p = ProjectParser.Parse("Controls/GridCtl.dsp", dsp).Project!;
+        Assert.Equal("GridCtl.ocx", p.Output);
+        Assert.Equal("ocx", p.Type);
+    }
+
+    [Fact]
+    public void Dsp_without_out_keeps_name_and_type_and_unquoted_out_works()
+    {
+        var plain = ProjectParser.Parse("old.dsp", "# TARGTYPE \"Win32 (x86) Dynamic-Link Library\" 0x0102\n# Name \"Old - Win32 Release\"\n").Project!;
+        Assert.Equal("Old.dll", plain.Output);
+        var lib = ProjectParser.Parse("util.dsp",
+            "# TARGTYPE \"Win32 (x86) Static Library\" 0x0104\n# ADD LIB32 /nologo /out:..\\lib\\UtilLib.lib\n# Name \"Util - Win32 Release\"\n").Project!;
+        Assert.Equal("UtilLib.lib", lib.Output);
+        Assert.Equal("lib", lib.Type);
+    }
 }
