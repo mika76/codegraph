@@ -16,6 +16,9 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
 
 ## How to work here
 - **Git, commit often**: prefer small, working commits (one logical change each, tests pass, tool still runs).
+- **Changelog**: every user-visible change gets a line under `## [Unreleased]` in `CHANGELOG.md` (Added / Changed /
+  Fixed / Removed). To release: rename it to `## [x.y.z] - date`, add a new empty `[Unreleased]`, update the links at
+  the bottom, commit, then tag `vx.y.z` and push - the Release workflow uses that section as the release notes.
 - **Save tokens**: hand self-contained subtasks (searching/reading many files, checking parser output, reviewing
   the report) to a subagent on a cheaper model when that is good enough; keep design work here.
   Parallel agents that write code should use worktrees (builds lock `obj/`), then merge their branches.
