@@ -47,13 +47,19 @@ StaffApp
   link is skipped rather than guessed, so what you see is there.
 
 How does it compare with general tools such as graphify? See [codegraph vs graphify](docs/codegraph-vs-graphify.md).
+What's coming next: [roadmap](docs/ROADMAP.md).
 
 ## Getting started
 
-You need Windows and the [.NET SDK 10](https://dotnet.microsoft.com/download) or newer. To build the native exe
-you also need Visual Studio (or the Build Tools) with the **Desktop development with C++** workload.
+1. **Get the tool**
 
-1. **Get the tool and build it**
+   **Download** the archive for your system from the
+   [latest release](https://github.com/mika76/codegraph/releases/latest) (Windows, Linux and macOS, x64 and ARM64)
+   and unzip it anywhere. It's a single executable with nothing else to install. The examples below use
+   `.\publish\codegraph.exe`; use the path you unzipped to, or put the folder on your `PATH` and just type `codegraph`.
+
+   **Or build it** with the [.NET SDK 10](https://dotnet.microsoft.com/download) or newer (on Windows the native
+   build also needs Visual Studio or the Build Tools with the **Desktop development with C++** workload):
 
    ```powershell
    git clone https://github.com/mika76/codegraph.git
@@ -229,7 +235,7 @@ Parsing uses text patterns, not a compiler - that's what makes it fast and able 
 - SQL or URLs assembled from many runtime pieces may be missed. Only names that exist in your code are linked.
 - Same-named routines: matching prefers the same file, then the same project, then the projects it references.
   Matches that remain ambiguous are skipped rather than guessed (the report counts them).
-- Built and tested on Windows; other platforms are untested.
+- Developed and used on Windows. The tests also run on Linux and macOS in CI, but real-world use there is limited so far.
 
 ## Development
 
@@ -240,3 +246,10 @@ dotnet test CodeGraph.slnx       # unit tests
 
 The code is in `src/CodeGraph` (C#, no runtime dependencies, Native AOT). `CLAUDE.md` describes the architecture:
 scanning, the parsers, how references are resolved, and the outputs.
+
+Releases: push a tag like `v0.2.0`; the Release workflow builds the native binaries for all platforms and
+attaches them to a GitHub release. See the [roadmap](docs/ROADMAP.md) for what's planned.
+
+## License
+
+[MIT](LICENSE)
