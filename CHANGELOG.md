@@ -10,8 +10,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 ## [Unreleased]
 
 ### 🐛 Fixed
-- 🔧 Visual C++ 6 projects (`.dsp`) take their output file from the linker's `/out:` (Release configuration first), so an
-  ActiveX control linked as `.ocx` is an `ocx` project and matches the installers and VB6 references that use it.
+- 🔧 C++ projects take their output file from the linker settings - `/out:` in `.dsp`, the linker's `OutputFile` in
+  `.vcproj` and `.vcxproj` (or `TargetName` + `TargetExt`), Release configuration first. An ActiveX control linked as
+  `.ocx` is now an `ocx` project and matches the installers and VB6 references that use it.
 
 ## [0.2.0] - 2026-10-25
 

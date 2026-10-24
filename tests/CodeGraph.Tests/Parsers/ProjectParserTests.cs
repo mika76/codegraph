@@ -136,6 +136,55 @@ public class ProjectParserTests
     }
 
     [Fact]
+    public void Vcxproj_output_from_linker_or_target_ext()
+    {
+        const string vcx = """
+            <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+              <PropertyGroup><ConfigurationType>DynamicLibrary</ConfigurationType></PropertyGroup>
+              <PropertyGroup><TargetExt Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">.ocx</TargetExt></PropertyGroup>
+              <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+                <Link><OutputFile>Debug/GridCtlD.ocx</OutputFile></Link>
+                <Bscmake><OutputFile>.\Debug/GridCtl.bsc</OutputFile></Bscmake>
+              </ItemDefinitionGroup>
+              <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+                <Bscmake><OutputFile>.\Release/GridCtl.bsc</OutputFile></Bscmake>
+                <Link><OutputFile>../../Controls/GridCtl.ocx</OutputFile></Link>
+              </ItemDefinitionGroup>
+            </Project>
+            """;
+        var p = ProjectParser.Parse("Controls/GridCtl.vcxproj", vcx).Project!;
+        Assert.Equal("GridCtl.ocx", p.Output);
+        Assert.Equal("ocx", p.Type);
+
+        // linker output made of macros -> TargetName + TargetExt
+        var macro = ProjectParser.Parse("Controls/GridCtl.vcxproj", vcx
+            .Replace("../../Controls/GridCtl.ocx", "$(OutDir)$(TargetName)$(TargetExt)")
+            .Replace("Debug/GridCtlD.ocx", "$(OutDir)$(TargetName)$(TargetExt)")).Project!;
+        Assert.Equal("GridCtl.ocx", macro.Output);
+    }
+
+    [Fact]
+    public void Vcproj_output_from_the_linker_tool_release_first()
+    {
+        const string vc = """
+            <VisualStudioProject ProjectType="Visual C++" Name="GridCtl">
+              <Configurations>
+                <Configuration Name="Debug|Win32" ConfigurationType="2">
+                  <Tool Name="VCLinkerTool" OutputFile="Debug/GridCtlD.ocx" />
+                </Configuration>
+                <Configuration Name="Release|Win32" ConfigurationType="2">
+                  <Tool Name="VCBscMakeTool" OutputFile=".\Release/GridCtl.bsc" />
+                  <Tool Name="VCLinkerTool" OutputFile="../../Controls/GridCtl.ocx" />
+                </Configuration>
+              </Configurations>
+            </VisualStudioProject>
+            """;
+        var p = ProjectParser.Parse("Controls/GridCtl.vcproj", vc).Project!;
+        Assert.Equal("GridCtl.ocx", p.Output);
+        Assert.Equal("ocx", p.Type);
+    }
+
+    [Fact]
     public void Dsp_without_out_keeps_name_and_type_and_unquoted_out_works()
     {
         var plain = ProjectParser.Parse("old.dsp", "# TARGTYPE \"Win32 (x86) Dynamic-Link Library\" 0x0102\n# Name \"Old - Win32 Release\"\n").Project!;

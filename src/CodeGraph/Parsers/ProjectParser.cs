@@ -285,6 +285,12 @@ public static partial class ProjectParser
         };
         p.Type = NativeType((First(root, "ConfigurationType") ?? "").ToLowerInvariant());
         p.Output = Or(First(root, "TargetName"), stem) + BinExt(p.Type);
+        // real output: the linker's / librarian's OutputFile, else TargetName + TargetExt (Release configuration first)
+        var outFiles = root.Descendants().Where(e => e.Name.LocalName == "OutputFile" && e.Parent?.Name.LocalName is "Link" or "Lib");
+        var exts = root.Descendants().Where(e => e.Name.LocalName == "TargetExt");
+        string? linked = PreferRelease(outFiles).Select(e => NativeFileName(Text(e))).FirstOrDefault(n => n is not null);
+        string? ext = PreferRelease(exts).Select(e => Text(e)?.Trim()).FirstOrDefault(x => x is { Length: > 1 } && !x.Contains("$("));
+        SetNativeOutput(p, linked ?? (ext is not null ? Or(First(root, "TargetName"), stem) + ext : null));
         foreach (var tag in new[] { "ClCompile", "ClInclude", "None", "ResourceCompile" })
             foreach (var el in Iter(root, tag))
                 if (Attr(el, "Include") is { } inc) p.Members.Add(inc);
@@ -308,6 +314,9 @@ public static partial class ProjectParser
         string? ctype = cfg == null ? null : Attr(cfg, "ConfigurationType");
         p.Type = ctype switch { "2" => "dll", "1" => "exe", "4" => "lib", _ => null };
         p.Output = p.Name + BinExt(p.Type);
+        // real output: OutputFile of the linker / librarian tool, Release configuration first
+        var tools = root.Descendants().Where(e => e.Name.LocalName == "Tool" && Attr(e, "Name") is "VCLinkerTool" or "VCLibrarianTool");
+        SetNativeOutput(p, PreferRelease(tools).Select(t => NativeFileName(Attr(t, "OutputFile"))).FirstOrDefault(n => n is not null));
         foreach (var el in Iter(root, "File"))
             if (Attr(el, "RelativePath") is { } rp) p.Members.Add(rp);
         return p;
@@ -326,14 +335,34 @@ public static partial class ProjectParser
         if (m.Success) p.Name = m.Groups[1].Value.Trim();
         p.Output = p.Name + BinExt(p.Type);
         // the linker's /out: names the real output (e.g. an ActiveX control linked as "../Controls/Grid.ocx")
-        if (DspOutFile(text) is { } outFile)
-        {
-            p.Output = outFile;
-            if (outFile.EndsWith(".ocx", StringComparison.OrdinalIgnoreCase)) p.Type = "ocx";
-        }
+        SetNativeOutput(p, DspOutFile(text));
         foreach (Match sm in DspSource().Matches(text))
             p.Members.Add(Unquote(sm.Groups[1].Value.Trim()));
         return p;
+    }
+
+    /// <summary>Elements in a Release configuration first (by a Condition / Name mentioning "Release" on them or a parent).</summary>
+    private static IEnumerable<XElement> PreferRelease(IEnumerable<XElement> els)
+    {
+        static bool IsRelease(XElement e) => e.AncestorsAndSelf().Any(a =>
+            (Attr(a, "Condition") ?? (a.Name.LocalName == "Configuration" ? Attr(a, "Name") : null))?.Contains("Release", StringComparison.OrdinalIgnoreCase) == true);
+        var list = els.ToList();
+        return list.Where(IsRelease).Concat(list.Where(e => !IsRelease(e)));
+    }
+
+    /// <summary>"../../Controls/Grid.ocx" -> "Grid.ocx"; null when empty or built from macros like $(OutDir).</summary>
+    private static string? NativeFileName(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Contains("$(")) return null;
+        string name = path.Trim().Trim('"').Replace('\\', '/').Split('/')[^1].Trim();
+        return name.Length > 0 && name.Contains('.') ? name : null;
+    }
+
+    private static void SetNativeOutput(ProjectInfo p, string? outFile)
+    {
+        if (outFile is null) return;
+        p.Output = outFile;
+        if (outFile.EndsWith(".ocx", StringComparison.OrdinalIgnoreCase)) p.Type = "ocx";
     }
 
     /// <summary>File name from "# ADD LINK32/LIB32 ... /out:..." - the Release configuration's if there is one, else the first.</summary>
