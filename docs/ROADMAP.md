@@ -29,7 +29,8 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
   definitions that name a report file, its parameters and the procedures behind it; import/export mappings; menu
   or permission definitions. Idea: declarative extractors in `codegraph.json` (file pattern + XPath / JSON path
   rules → nodes and links, with embedded SQL parsed as SQL) so company-specific formats stay in your own config,
-  plus an "external command" escape hatch for formats rules can't describe.
+  plus an "external command" escape hatch for formats rules can't describe. See the
+  [design proposal](design/extractors.md).
 - **Release diff** (M). `codegraph diff 2.3 2.4` (two releases, or two branches/graphs): modules, tables,
   procedures and API routes added, removed or changed. Builds on the release tracking that already exists.
 
