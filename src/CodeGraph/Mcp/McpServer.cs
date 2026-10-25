@@ -30,8 +30,9 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         "A code knowledge graph of the configured repositories: projects, files, routines, database tables and " +
         "procedures, API routes, installers and releases, and how they use each other. Start with `search` to find " +
         "a node, then use `show` (its connections; filter with relation/direction), `impact` (what depends on it), " +
-        "`path` (how two things are connected) and `source` (read the code). Every tool taking a name also takes a " +
-        "node id; ids are printed in {braces}. Links are deterministic but not complete (e.g. URLs built at runtime " +
+        "`path` (how two things are connected) and `source` (read the code). Those tools need an exact node id, name " +
+        "or path (ids are printed in {braces}), or a pattern with * as wildcard; they never guess. Links are " +
+        "deterministic but not complete (e.g. URLs built at runtime " +
         "and late binding are not followed), so check important answers against the source.";
 
     private Graph? _graph;
@@ -127,6 +128,10 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
 
     // ---- tool definitions ----
 
+    private const string NameHelp =
+        "Node id (from search, shown in {braces}), exact name, qualified name or path; use * as a wildcard " +
+        "(e.g. db:award*, *SlotShort*). Several matches or none return the candidates with their ids.";
+
     private static JsonArray Tools() => new(
     [
         Tool("search",
@@ -149,7 +154,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "unknown relation returns every relation in this graph.",
             new JsonObject
             {
-                ["name"] = Str("Node name, path or id."),
+                ["name"] = Str(NameHelp),
                 ["relation"] = Str("Only connections with this relation."),
                 ["direction"] = new JsonObject
                 {
@@ -166,7 +171,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "routine, file or project.",
             new JsonObject
             {
-                ["name"] = Str("Node name, path or id."),
+                ["name"] = Str(NameHelp),
                 ["depth"] = Int("How many steps to follow.", 3),
             }, "name"),
         Tool("path",
@@ -175,8 +180,8 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "none, and is marked as such.",
             new JsonObject
             {
-                ["from"] = Str("First node: name, path or id."),
-                ["to"] = Str("Second node: name, path or id."),
+                ["from"] = Str("First node. " + NameHelp),
+                ["to"] = Str("Second node. " + NameHelp),
                 ["max_len"] = Int("Longest chain to look for, in steps.", 8),
             }, "from", "to"),
         Tool("source",
@@ -184,7 +189,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "line numbers.",
             new JsonObject
             {
-                ["name"] = Str("Node name, path or id."),
+                ["name"] = Str(NameHelp),
                 ["context"] = Int("Extra lines before and after a definition.", 0),
                 ["max_lines"] = Int("Most lines to return.", 200),
             }, "name"),
@@ -300,17 +305,8 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
     {
         var g = Current();
         string name = Need(a, key);
-        var nid = GraphQuery.Resolve(g, name, out var ambiguous);
-        if (nid is null)
-            throw new ToolException(GraphQuery.LooksLikeId(name)
-                ? $"No node has the id '{name}'. Try the search tool."
-                : $"Nothing matches '{name}'. Try the search tool.");
-        if (ambiguous.Count == 0) return nid;
-        var w = new StringWriter { NewLine = "\n" };
-        w.WriteLine($"'{name}' matches several things. Call again with one of these ids as {key}:");
-        foreach (var h in ambiguous.Take(25)) w.WriteLine($"  {GraphQuery.Label(g, h)}  {{{h}}}");
-        if (ambiguous.Count > 25) w.WriteLine($"  ... {ambiguous.Count - 25} more");
-        throw new ToolException(w.ToString());
+        var m = GraphQuery.Resolve(g, name);
+        return m.Id ?? throw new ToolException(GraphQuery.Problem(g, name, m) + $"Call again with an id as {key}, or use the search tool.");
     }
 
     private static string? Text(JsonObject a, string key) =>

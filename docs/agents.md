@@ -21,9 +21,9 @@ numbers to check. The agent then reads only the few files that matter.
    | How does A reach B? | `codegraph path "A" "B"` |
 
    `X` can be a project, file, routine (`frmOrder.cmdPlace_Click`, `OrderRepository.GetById`), table, stored
-   procedure, view, API route or installer. If a name matches several things (many apps have a `frmMain`), the
-   tool lists the candidates with their ids and answers for the first one - so check which one it used, and
-   repeat the command with the right path or id.
+   procedure, view, API route or installer. The name must match exactly (id, name, qualified name or path, any
+   case), or use `*` as a wildcard. If it matches several things (many apps have a `frmMain`) or nothing, the tool
+   answers nothing and lists the candidates with their ids - repeat the command with the right one.
 2. **Verify in the source.** Every result has `path:line`. Open the important ones before answering or editing:
    the parsers are pattern-based, so a link can occasionally be wrong, and some links are missing (see below).
 3. **Mention the blind spots** when they matter: calls through untyped variables (VB6 `Object`/`Variant`, late
@@ -47,8 +47,10 @@ files that the `source` tool shows.
 | `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
 
-Every `name` can also be a node id; ids are printed in `{braces}`. A name that matches several things returns the
-candidates with their ids instead of guessing, and the agent calls again with the id it means. The server loads
+`search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
+`{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:award*`,
+`*SlotShort*`). A name that matches several things or nothing returns the candidates with their ids, and the agent
+calls again with the id it means. The server loads
 `graph.json` on first use and loads it again after a `codegraph build`, so it never has to be restarted. Output
 longer than 40,000 characters is cut, with a hint to narrow the query.
 

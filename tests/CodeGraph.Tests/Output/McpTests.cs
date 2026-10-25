@@ -153,12 +153,19 @@ public sealed class McpTests : IDisposable
         var s = Server();
         var (text, err) = Call(s, "show", new JsonObject { ["name"] = "Orders" });
         Assert.True(err);
-        Assert.Equal("'Orders' matches several things. Call again with one of these ids as name:\n" +
-                     "  Orders (db_table)  {db:Orders}\n  Orders (db_table)  {db:other.Orders}\n", text);
+        Assert.Equal("'Orders' matches 2 things. Use one of these ids (or a narrower pattern):\n" +
+                     "  Orders (db_table)  {db:Orders}\n  Orders (db_table)  {db:other.Orders}\n" +
+                     "Call again with an id as name, or use the search tool.", text);
         Assert.False(Call(s, "show", new JsonObject { ["name"] = "db:other.Orders" }).IsError);
-        Assert.Equal(("Nothing matches 'zzz'. Try the search tool.", true), Call(s, "impact", new JsonObject { ["name"] = "zzz" }));
-        // an id that doesn't exist is not answered with whatever contains it
-        Assert.Equal(("No node has the id 'db:Ord'. Try the search tool.", true), Call(s, "show", new JsonObject { ["name"] = "db:Ord" }));
+        Assert.Equal(("Nothing is called 'zzz'.\nCall again with an id as name, or use the search tool.", true),
+            Call(s, "impact", new JsonObject { ["name"] = "zzz" }));
+        // an id that doesn't exist is not answered with whatever contains it; the near misses are offered
+        var (missing, missingErr) = Call(s, "show", new JsonObject { ["name"] = "db:Ord" });
+        Assert.True(missingErr);
+        Assert.StartsWith("No node has the id 'db:Ord'.\nClosest (use an id, or * as a wildcard):\n  Orders (db_table)  {db:Orders}\n", missing);
+        // a wildcard picks the one match, or lists several
+        Assert.False(Call(s, "show", new JsonObject { ["name"] = "db:usp*" }).IsError);
+        Assert.StartsWith("'db:*' matches", Call(s, "show", new JsonObject { ["name"] = "db:*" }).Text);
         Assert.False(Call(s, "show", new JsonObject { ["name"] = "DB:USP_SAVE" }).IsError); // ids ignore case
         Assert.Equal(("Missing argument: to", true), Call(s, "path", new JsonObject { ["from"] = "usp_Save" }));
         Assert.True(Call(s, "show", new JsonObject { ["name"] = "Orders", ["direction"] = "up" }).IsError);

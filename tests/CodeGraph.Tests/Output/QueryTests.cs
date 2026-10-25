@@ -12,12 +12,31 @@ public class QueryTests
     }
 
     [Fact]
-    public void Find_prefers_exact_matches()
+    public void Names_match_exactly_ignoring_case_and_never_partially()
     {
         var g = SampleGraph.Create();
-        Assert.Equal(["db:Orders"], GraphQuery.Find(g, "orders"));
-        Assert.Contains("db:Unused", GraphQuery.Find(g, "unus"));
-        Assert.Empty(GraphQuery.Find(g, "zzz"));
+        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "orders").Id);                       // name
+        Assert.Equal(SampleGraph.Save, GraphQuery.Resolve(g, "FRMMAIN.SAVE").Id);           // qualified name
+        Assert.Equal(SampleGraph.FDb, GraphQuery.Resolve(g, "sales/moddb.bas").Id);         // path
+        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "DB:orders").Id);                   // id
+        var partial = GraphQuery.Resolve(g, "unus");
+        Assert.Null(partial.Id);
+        Assert.Equal(["db:Unused"], partial.Near);                                          // offered, not picked
+        Assert.Empty(GraphQuery.Resolve(g, "zzz").Near);
+    }
+
+    [Fact]
+    public void A_wildcard_matches_a_pattern()
+    {
+        var g = SampleGraph.Create();
+        Assert.Equal("db:Unused", GraphQuery.Resolve(g, "unus*").Id);
+        Assert.Equal(SampleGraph.Load, GraphQuery.Resolve(g, "sym:Shop:*#modDb.L*").Id);
+        var several = GraphQuery.Resolve(g, "*save*");
+        Assert.Null(several.Id);
+        Assert.Equal(["db:usp_Save", SampleGraph.Save], several.Matches.Order(StringComparer.Ordinal));
+        Assert.Null(GraphQuery.Resolve(g, "zz*").Id);
+        // '?' is an ordinary character (URLs), not a wildcard
+        Assert.Null(GraphQuery.Resolve(g, "Order?").Id);
     }
 
     [Fact]
@@ -51,36 +70,28 @@ public class QueryTests
     [Fact]
     public void Nothing_matches()
     {
-        Assert.Equal("Nothing matches 'zzz'.\n", Run(w => GraphQuery.Show(SampleGraph.Create(), "zzz", w)));
-        Assert.Equal("Nothing matches 'zzz'.\n", Run(w => GraphQuery.Impact(SampleGraph.Create(), "zzz", w)));
-        Assert.Equal("Nothing matches 'zzz'.\n", Run(w => GraphQuery.Path(SampleGraph.Create(), "Orders", "zzz", w)));
+        Assert.Equal("Nothing is called 'zzz'.\n", Run(w => GraphQuery.Show(SampleGraph.Create(), "zzz", w)));
+        Assert.Equal("Nothing is called 'zzz'.\n", Run(w => GraphQuery.Impact(SampleGraph.Create(), "zzz", w)));
+        Assert.Equal("Nothing is called 'zzz'.\n", Run(w => GraphQuery.Path(SampleGraph.Create(), "Orders", "zzz", w)));
+        // a partial name answers nothing but offers the candidates with their ids
+        Assert.Equal("Nothing is called 'unus'.\nClosest (use an id, or * as a wildcard):\n  Unused (db_table)  {db:Unused}\n",
+            Run(w => GraphQuery.Show(SampleGraph.Create(), "unus", w)));
+        Assert.StartsWith("No node has the id 'db:Ord'.\nClosest (use an id, or * as a wildcard):\n  Orders (db_table)  {db:Orders}\n",
+            Run(w => GraphQuery.Show(SampleGraph.Create(), "db:Ord", w)));
     }
 
     [Fact]
-    public void Ambiguous_names_are_listed()
+    public void Ambiguous_names_answer_nothing_and_list_the_ids()
     {
         var g = SampleGraph.Create();
         g.Node("db:other.Orders", ("kind", "db_table"), ("name", "Orders"));
-        var text = Run(w => GraphQuery.Show(g, "Orders", w));
-        Assert.StartsWith("'Orders' matches several things, using the first. Be more specific (use a path or id):\n    db:Orders\n    db:other.Orders\n", text);
-    }
-
-    [Fact]
-    public void Exact_ids_win_and_ambiguity_is_reported()
-    {
-        var g = SampleGraph.Create();
-        g.Node("db:other.Orders", ("kind", "db_table"), ("name", "Orders"));
-        Assert.Equal("db:other.Orders", GraphQuery.Resolve(g, "db:other.Orders", out var none));
-        Assert.Empty(none);
-        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "Orders", out var amb));
-        Assert.Equal(["db:Orders", "db:other.Orders"], amb);
-        Assert.Null(GraphQuery.Resolve(g, "zzz", out _));
-        // id-shaped: exact id (any case) or nothing - never a substring match on another node
-        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "DB:orders", out _));
-        Assert.Null(GraphQuery.Resolve(g, "db:Ord", out _));
-        Assert.Equal("No node has the id 'db:Ord'.\n", Run(w => GraphQuery.Show(g, "db:Ord", w)));
-        Assert.Equal("frmMain.frm (file)  [Sales/frmMain.frm]",
-            Run(w => GraphQuery.Show(g, "Sales/frmMain.frm", w)).Split('\n')[0]); // a path with no id prefix still matches
+        Assert.Equal("'Orders' matches 2 things. Use one of these ids (or a narrower pattern):\n" +
+                     "  Orders (db_table)  {db:Orders}\n  Orders (db_table)  {db:other.Orders}\n", Run(w => GraphQuery.Show(g, "Orders", w)));
+        Assert.Equal("db:other.Orders", GraphQuery.Resolve(g, "db:other.Orders").Id);
+        // same name, different weight: the table beats a routine called Orders (the answer's label says which)
+        var h = SampleGraph.Create();
+        h.Node("sym:Shop:Sales/modDb.bas#modDb.Orders", ("kind", "function"), ("name", "Orders"), ("qual", "modDb.Orders"));
+        Assert.Equal("db:Orders", GraphQuery.Resolve(h, "Orders").Id);
     }
 
     [Fact]

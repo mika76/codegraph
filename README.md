@@ -110,8 +110,9 @@ What's coming next: [roadmap](docs/ROADMAP.md).
    .\publish\codegraph.exe path frmMain Orders      # how two things are connected
    ```
 
-   If a name matches several things (there are often many `frmMain`), the tool lists them; repeat with the path or
-   id it shows.
+   A name must match exactly (id, name, qualified name or path, any case); use `*` as a wildcard (`"Order*"`,
+   `"*Repository.GetById"`). When it matches several things (there are often many `frmMain`) or nothing, the tool
+   lists the candidates with their ids instead of guessing; repeat with the path or id it shows.
 
 ## Everyday use
 

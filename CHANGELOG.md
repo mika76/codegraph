@@ -18,7 +18,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   `docs/agents.md`.
 
 ### 🔄 Changed
-- 🎯 A node id given as a name now always picks that node, even when other nodes share its name.
+- 🎯 `show`, `impact`, `path` (and the MCP tools, `source` too) never guess which node you mean. A name must match
+  exactly - node id, name, qualified name or path, ignoring case - or be a pattern with `*` as wildcard
+  (`db:award*`, `*SlotShort*`). Several matches, or none, answer nothing and list the candidates with their ids
+  (for none: the closest names). Before, a partial name silently picked the first thing that contained it, and an
+  ambiguous name was answered for the first match. Use `search` (MCP) to find things by part of their name.
 - 📊 "References resolved" in the report only counts guesses - any string that looks like an object name, any
   `x.y(` in SQL - when they link to something, so the rate reflects real references. It is higher than before
   for the same code.

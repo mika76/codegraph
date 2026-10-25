@@ -15,19 +15,14 @@ public static class GraphQuery
 
     private static string Low(string? s) => (s ?? "").ToLowerInvariant();
 
-    /// <summary>Node ids whose name/qual/path/id equals the text (case-insensitive), else those containing it.</summary>
-    public static List<string> Find(Graph g, string name)
-    {
-        string low = name.Trim().ToLowerInvariant();
-        List<string> exact = [], partial = [];
-        foreach (var n in g.Nodes)
-        {
-            string[] cands = [Low(n.Str("name")), Low(n.Str("qual")), Low(n.Str("path")), n.Id.ToLowerInvariant()];
-            if (cands.Contains(low)) exact.Add(n.Id);
-            else if (cands.Any(c => c.Length > 0 && c.Contains(low, StringComparison.Ordinal))) partial.Add(n.Id);
-        }
-        return exact.Count > 0 ? exact : partial;
-    }
+    /// <summary>The texts a name is compared with: name, qualified name, path, id (lower case).</summary>
+    private static string[] Keys(Node n) => [Low(n.Str("name")), Low(n.Str("qual")), Low(n.Str("path")), n.Id.ToLowerInvariant()];
+
+    /// <summary>
+    /// The result of looking a name up: <see cref="Id"/> when exactly one node is meant; otherwise
+    /// <see cref="Matches"/> (several, ambiguous) or <see cref="Near"/> (none - the closest, for the message).
+    /// </summary>
+    public sealed record NameMatch(string? Id, List<string> Matches, List<string> Near);
 
     public static string Label(Graph g, string nid)
     {
@@ -51,27 +46,61 @@ public static class GraphQuery
     };
 
     /// <summary>
-    /// The node meant by a name: an exact node id wins, else the best-ranked match. <paramref name="ambiguous"/> gets
-    /// all candidates (best first) when the top two look alike (same rank and name), else stays empty.
+    /// The node a name means - never a guess. Without '*' only an exact id, name, qualified name or path counts
+    /// (ignoring case); with '*' the name is a pattern ('db:award*', '*Slot_Short*', 'sym:Api:*#Orders*.Get*').
+    /// Several exact matches of different weight pick the heaviest (a project or table over a file or routine of the
+    /// same name - the answer's first line says which); otherwise several matches are ambiguous. With no match the
+    /// closest names (containing the text) are returned for the message. Only '*' is special: '?' occurs in URLs.
     /// </summary>
-    public static string? Resolve(Graph g, string name, out List<string> ambiguous)
+    public static NameMatch Resolve(Graph g, string name)
     {
-        ambiguous = [];
-        if (g.HasNode(name.Trim())) return name.Trim();
-        // an id that doesn't exist must not fall back to "anything containing it" (db:a -> Audit_Trail)
-        if (LooksLikeId(name))
-            return g.Nodes.FirstOrDefault(n => string.Equals(n.Id, name.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
-        var hits = Find(g, name);
-        if (hits.Count == 0) return null;
+        string n = name.Trim();
+        if (g.HasNode(n)) return new(n, [], []);
+        bool wildcard = n.Contains('*');
+        List<string> hits;
+        if (wildcard)
+        {
+            var re = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(n).Replace(@"\*", ".*") + "$",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+                | System.Text.RegularExpressions.RegexOptions.Singleline);
+            hits = g.Nodes.Where(x => Keys(x).Any(k => k.Length > 0 && re.IsMatch(k))).Select(x => x.Id).ToList();
+        }
+        else
+        {
+            string low = n.ToLowerInvariant();
+            hits = g.Nodes.Where(x => Keys(x).Contains(low)).Select(x => x.Id).ToList();
+        }
+        if (hits.Count == 1) return new(hits[0], [], []);
         if (hits.Count > 1)
         {
-            hits = hits.OrderBy(h => Rank(g.GetNode(h)!)).ThenBy(h => h.Length).ToList();
-            var a = g.GetNode(hits[0])!;
-            var b = g.GetNode(hits[1])!;
-            if (Rank(a) == Rank(b) && Low(a.Str("name")) == Low(b.Str("name")))
-                ambiguous = hits;
+            var ranked = hits.OrderBy(h => Rank(g.GetNode(h)!)).ThenBy(h => h.Length).ThenBy(h => h, StringComparer.Ordinal).ToList();
+            if (!wildcard && Rank(g.GetNode(ranked[0])!) < Rank(g.GetNode(ranked[1])!)) return new(ranked[0], [], []);
+            return new(null, ranked, []);
         }
-        return hits[0];
+        return new(null, [], wildcard ? [] : Search(g, n).Take(5).ToList());
+    }
+
+    /// <summary>Why a name picked no node, with the candidates' labels and ids; null when it picked one.</summary>
+    public static string? Problem(Graph g, string name, NameMatch m)
+    {
+        if (m.Id is not null) return null;
+        var w = new StringWriter { NewLine = "\n" };
+        if (m.Matches.Count > 0)
+        {
+            w.WriteLine($"'{name}' matches {m.Matches.Count} things. Use one of these ids (or a narrower pattern):");
+            foreach (var h in m.Matches.Take(25)) w.WriteLine($"  {Label(g, h)}  {{{h}}}");
+            if (m.Matches.Count > 25) w.WriteLine($"  ... {m.Matches.Count - 25} more");
+        }
+        else
+        {
+            w.WriteLine(LooksLikeId(name) ? $"No node has the id '{name}'." : $"Nothing is called '{name}'.");
+            if (m.Near.Count > 0)
+            {
+                w.WriteLine("Closest (use an id, or * as a wildcard):");
+                foreach (var h in m.Near) w.WriteLine($"  {Label(g, h)}  {{{h}}}");
+            }
+        }
+        return w.ToString();
     }
 
     private static readonly string[] IdPrefixes =
@@ -86,18 +115,9 @@ public static class GraphQuery
 
     private static string? Choose(Graph g, string name, TextWriter w)
     {
-        var nid = Resolve(g, name, out var ambiguous);
-        if (nid is null)
-        {
-            w.WriteLine(LooksLikeId(name) ? $"No node has the id '{name}'." : $"Nothing matches '{name}'.");
-            return null;
-        }
-        if (ambiguous.Count > 0)
-        {
-            w.WriteLine($"'{name}' matches several things, using the first. Be more specific (use a path or id):");
-            foreach (var h in ambiguous.Take(15)) w.WriteLine("    " + h);
-        }
-        return nid;
+        var m = Resolve(g, name);
+        if (Problem(g, name, m) is { } problem) w.Write(problem);
+        return m.Id;
     }
 
     /// <summary>The repository a node belongs to: its "repo" attribute, else the second part of its id.</summary>
