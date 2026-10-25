@@ -45,6 +45,28 @@ public class SqlParserTests
     }
 
     [Fact]
+    public void A_definition_ends_at_go_and_the_rest_belongs_to_the_script()
+    {
+        const string patch = """
+            IF OBJECT_ID('dbo.usp_Close') IS NOT NULL DROP PROCEDURE dbo.usp_Close
+            GO
+            CREATE PROCEDURE dbo.usp_Close @id int AS
+              UPDATE dbo.Orders SET Status = 2 WHERE Id = @id
+            GO
+            UPDATE dbo.Patch_Level SET Patch_Date = GETDATE()
+            go
+            CREATE VIEW dbo.v_Open AS SELECT Id FROM dbo.Orders WHERE Status = 1
+            """;
+        var f = SqlParser.Parse("Patches/Patch12.sql", patch);
+        Assert.Contains(f.Refs, r => r is { Kind: "sql", From: "usp_close", Mode: "write", Name: "orders" });
+        Assert.DoesNotContain(f.Refs, r => r.From == "usp_close" && r.Name.Contains("patch_level"));
+        Assert.Contains(f.Refs, r => r is { Kind: "sql", From: null, Mode: "write", Name: "patch_level" });   // the script
+        Assert.Contains(f.Refs, r => r is { Kind: "column", From: null, Mode: "write", Name: "patch_date" });
+        Assert.Contains(f.Refs, r => r is { Kind: "sql", From: "v_open", Name: "orders" });
+        Assert.DoesNotContain(f.Refs, r => r.From == "v_open" && r.Name.Contains("patch_level"));
+    }
+
+    [Fact]
     public void AlterTable_WithoutCreate_KeepsAlterRefAndOwnerHint()
     {
         var f = SqlParser.Parse("p.sql", "ALTER TABLE dbo.Foo ADD CONSTRAINT x FOREIGN KEY (a) REFERENCES dbo.Bar (a)");

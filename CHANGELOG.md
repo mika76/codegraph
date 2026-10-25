@@ -43,6 +43,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 📜 In SQL scripts a procedure, view, function or trigger definition ends at its batch's `GO` (as in T-SQL), not at
+  the next definition: what a patch script does after the `GO` (e.g. updating a patch-level table) is the script's
+  own work and is no longer attributed to the procedure defined before it. Applies to SQL embedded in your own file
+  formats too.
 - 🗃️ Old-style comma joins (`FROM Orders o, Lines l`) read every listed table, not just the first, and a
   `CREATE TABLE` written on one line keeps all its columns.
 - 🧪 .NET test projects (referencing xUnit, NUnit, MSTest or `Microsoft.NET.Test.Sdk`) are marked `test` and are not

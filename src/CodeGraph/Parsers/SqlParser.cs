@@ -22,6 +22,9 @@ public static partial class SqlParser
     [GeneratedRegex(@"^\s*,?\s*\[?([A-Za-z_][\w ]*?)\]?\s+\[?(\w+)\]?\s*(\([^)]*\))?", Ic | RegexOptions.Multiline)]
     private static partial Regex ColumnRe();
 
+    [GeneratedRegex(@"^[ \t]*GO(?:[ \t]+\d+)?[ \t]*;?[ \t]*\r?$", Ic | RegexOptions.Multiline)]
+    private static partial Regex GoLineRe();
+
     /// <summary>The parts of a list split at commas outside brackets: "a int, b decimal(10, 2)" -> 2 parts.</summary>
     private static IEnumerable<string> TopLevelParts(string list)
     {
@@ -80,10 +83,17 @@ public static partial class SqlParser
         var symbols = new List<Symbol>();
         var refs = new List<Ref>();
 
-        // segment boundaries: each definition runs to the next definition
+        // segment boundaries: a definition runs to the end of its batch (the next GO line, as in T-SQL) or to the
+        // next definition - what follows the GO in a patch script belongs to the script, not to the procedure
+        var gos = GoLineRe().Matches(code).Select(g => g.Index).ToList();
         var spans = new List<(Match M, int End)>();
         for (int i = 0; i < defs.Count; i++)
-            spans.Add((defs[i], i + 1 < defs.Count ? defs[i + 1].Index : code.Length));
+        {
+            int end = i + 1 < defs.Count ? defs[i + 1].Index : code.Length;
+            int at = gos.BinarySearch(defs[i].Index + 1);
+            if (at < 0) at = ~at;
+            spans.Add((defs[i], at < gos.Count && gos[at] < end ? gos[at] : end));
+        }
 
         string StringsIn(int a, int b) =>
             string.Join(' ', strings.Where(s => a <= s.Offset && s.Offset < b).Select(s => s.Value));
