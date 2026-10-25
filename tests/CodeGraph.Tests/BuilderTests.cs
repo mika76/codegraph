@@ -423,6 +423,11 @@ public class BuilderTests
         Assert.True(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:Data/Shop.Data.csproj", "depends_on"));
         Assert.False(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:System/System.vbp", "depends_on"));   // framework
         Assert.False(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:Billing/Billing.vbp", "depends_on")); // a VB6 exe
+        Assert.False(g.GetNode("proj:Shop:Api/Shop.Api.csproj")!.Bool("test"));
+
+        var tests = Net("Shop.Api.Tests", new LibRef { Kind = "package", Name = "Microsoft.NET.Test.Sdk" });
+        var g2 = Build(Cfg("Shop"), Rec("Tests/Shop.Api.Tests.csproj", tests));
+        Assert.True(g2.GetNode("proj:Shop:Tests/Shop.Api.Tests.csproj")!.Bool("test"));
     }
 
     [Fact]

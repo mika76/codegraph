@@ -371,7 +371,7 @@ public static class KnowledgeLoader
             string rid = $"rel:{version}";
             if (!g.HasNode(rid))
                 g.Node(rid, ("kind", "release"), ("name", version), ("status", $"from branch {branch}"));
-            foreach (var n in g.Nodes.Where(n => n.Kind == "project" && n.Str("repo") == rn.Name).ToList())
+            foreach (var n in g.Nodes.Where(n => n.Kind == "project" && n.Str("repo") == rn.Name && !n.Bool("test")).ToList())
             {
                 string? pv = n.Str("version");
                 AddRelease(g, n.Id, rid, string.IsNullOrEmpty(pv) ? null : pv, "branch");

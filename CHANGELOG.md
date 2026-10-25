@@ -36,6 +36,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🧪 .NET test projects (referencing xUnit, NUnit, MSTest or `Microsoft.NET.Test.Sdk`) are marked `test` and are not
+  counted as part of a release taken from the branch name.
 - 🔗 A .NET reference is only linked to a project that can produce it: `<Reference Include="System" />` (a framework
   assembly, no HintPath) no longer makes every .NET project depend on a VB6 app that happens to be called `System`,
   and assembly/package references only reach .NET projects, native libraries only C/C++ projects.

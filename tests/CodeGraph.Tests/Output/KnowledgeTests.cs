@@ -185,6 +185,16 @@ public sealed class KnowledgeTests : IDisposable
     }
 
     [Fact]
+    public void Test_projects_are_not_released_by_branch()
+    {
+        var g = SampleGraph.Create();
+        g.Node("proj:Shop:Sales.Tests/Sales.Tests.csproj", ("kind", "project"), ("name", "Sales.Tests"), ("repo", "Shop"), ("test", true));
+        KnowledgeLoader.ApplyBranchReleases(g);
+        Assert.NotNull(g.GetEdge(SampleGraph.Proj, "rel:2.4.0", "released_in"));
+        Assert.Null(g.GetEdge("proj:Shop:Sales.Tests/Sales.Tests.csproj", "rel:2.4.0", "released_in"));
+    }
+
+    [Fact]
     public void A_release_named_by_branch_and_releases_json_is_counted_once()
     {
         var g = SampleGraph.Create();

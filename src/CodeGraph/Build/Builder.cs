@@ -330,6 +330,8 @@ public sealed partial class Builder
                 ("project_files", Arr(info.Files)), ("format", p.Format), ("lang", p.Lang), ("ptype", p.Type),
                 ("output", p.Output), ("version", p.Version), ("framework", Framework(p)), ("assembly", p.Assembly),
                 ("area", info.Area), ("internal_name", p.Name));
+            if (info.Libs.Any(l => l.Kind is "assembly" or "package" && TestFrameworks.Contains(l.Name.Split(',')[0].Trim())))
+                _g.Node(pid, ("test", true));
             _g.AddEdge($"repo:{info.Repo}", pid, "contains");
             _g.AddEdge(aid, pid, "contains");
             foreach (var key in new HashSet<string> { Paths.Stem(p.Output), (p.Assembly ?? "").ToLowerInvariant(),
@@ -975,6 +977,13 @@ public sealed partial class Builder
         _g.Node(eid, ("kind", "library"), ("name", name!.Trim()), ("lib_kind", kind), ("version", version));
         return eid;
     }
+
+    /// <summary>.NET test frameworks: a project referencing one is a test project (not shipped).</summary>
+    private static readonly HashSet<string> TestFrameworks = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Microsoft.NET.Test.Sdk", "xunit", "xunit.core", "xunit.v3", "nunit", "nunit.framework", "MSTest.TestFramework",
+        "MSTest", "Microsoft.VisualStudio.QualityTools.UnitTestFramework", "Microsoft.VisualStudio.TestPlatform.TestFramework",
+    };
 
     private static readonly HashSet<string> DotNetFormats = ["csproj", "vbproj", "fsproj"];
     private static readonly HashSet<string> NativeFormats = ["vcxproj", "vcproj", "dsp"];
