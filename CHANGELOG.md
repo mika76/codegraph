@@ -9,6 +9,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-25
+
+🤖 MCP server, column-level impact and naming-independent linking.
+
 ### ✨ Added
 - 🧭 **Client-side routes** (Vue Router style tables): every route is a node (`route:<repo>:<path>`, kind `route`,
   with its name and `meta`, e.g. the permission that guards it) that `routes_to` its component (static or lazy
@@ -205,6 +209,7 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 📦 **Native executables** for Windows, Linux and macOS (x64 and ARM64) on every release; CI runs the tests on all
   three systems.
 
-[Unreleased]: https://github.com/mika76/codegraph/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mika76/codegraph/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mika76/codegraph/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mika76/codegraph/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mika76/codegraph/releases/tag/v0.1.0

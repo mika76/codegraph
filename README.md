@@ -236,7 +236,8 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 - project → project (project references, your own OCX/COM/DLL components, code that crosses projects) and →
   external libraries and packages
 - routine → routine calls, `New` / instantiation, inheritance, type usage; C# calls through an interface also link
-  to the implementing class
+  to the implementing class, and a member links to the interface member it `implements` or the base member it
+  `overrides` (so `impact` on an interface method reaches every implementation)
 - code → database: SQL inline in VB6/C#/PowerShell/JS strings, stored-procedure names in strings (where the code
   uses a database API - ADO, ADO.NET, Entity Framework, ODBC, `sqlcmd` - or the name has one of your
   `proc_prefixes`; column names like `rs.Fields("x")` are not calls), ADO recordsets that `.Update`/`.AddNew`
@@ -244,13 +245,16 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 - columns: every column of a table is a node (`Orders.Total`) linked to the procedures, views, code, reports and
   patch scripts that read, write or alter it - `impact Orders.Total` before renaming or changing a column. A name is
   linked when it is qualified (`o.Total`) or only one table of the statement has such a column; never guessed.
-- VB6 `Declare ... Lib "X.dll"` → the function in your own X.dll project
+- VB6 `Declare ... Lib "X.dll"` and C# `[DllImport("X.dll")]` → the function in your own X.dll project
 - TS/JS/Vue: imports (relative, `@/`, tsconfig `paths`, lazy `import()`, re-exports), calls through imports,
   components used in `<template>`, imports of your own npm packages into their source
 - front end → back end: `api.get('/orders')`, `fetch`, `$.ajax({url})`, or a URL passed to your own wrapper
   (linked when it matches a route) in TS/JS/Vue/Razor → the C# controller action serving that route
   (`[Route]`/`[HttpGet]` attributes; a base path like `/api` or `/v1` on either side is allowed); Razor
-  `Url.Action("Edit", "Orders")` → `OrdersController.Edit`
+  `Url.Action("Edit", "Orders")` → `OrdersController.Edit`; URLs passed to `HttpClient` / `WebClient` / RestSharp in
+  C# too
+- client-side routes (Vue Router style tables): each route is a node that `routes_to` its component and
+  `redirects_to` another route; `router.push`, `<router-link to>` and page links `links_to` the route or action
 - MVC: controller action → its view, `@model` types, partials
 - installers: which projects/files and third-party binaries each installer ships, features, services, custom actions
 - releases from git branch names and from `releases.json`

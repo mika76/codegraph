@@ -7,7 +7,8 @@ allowed-tools: mcp__codegraph Bash(./publish/codegraph.exe *) Read Grep
 Question: $ARGUMENTS
 
 Work from the codegraph folder (where `codegraph.json` is):
-1. Identify the thing(s) asked about (project, file, routine, table/proc, API route, installer).
+1. Identify the thing(s) asked about (project, file, routine, table/proc, column like `Orders.Total`, API route,
+   client route, installer).
 2. Use the graph first. If the `codegraph` MCP tools are available, use them:
    `search` (find the node and its id), `show` (connections; `relation` + `direction` to filter, e.g. who writes
    a table), `impact` (what depends on it), `path` (how two things connect), `source` (read the code). When a

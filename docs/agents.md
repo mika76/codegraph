@@ -146,7 +146,8 @@ It has three parts:
   called, `Repo: path:line`).
 - **Common node fields**: `kind`, `name`, `repo`, `path` (files, projects), `file` + `line` (symbols, DB objects),
   `lang`, `signature`, `projects` (files: the projects that build them), `routes` (controller actions).
-- **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `calls_native`, `includes`,
+- **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `implements` / `overrides`
+  (a member to the interface or base member it implements), `calls_native`, `includes`,
   `imports`, `uses_component`, `calls_api`, `renders`, `mentions`, `uses_value` (enum members, constants),
   `reads`, `writes`, `executes`, `references` (foreign key), `triggers_on`, `defines`, `alters`, `depends_on`,
   `uses_library`, `uses_code_of`, `ships`, `released_in`, `links_to` (a page link to an action or a client route -

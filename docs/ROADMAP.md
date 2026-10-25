@@ -14,7 +14,7 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
 
 ## Next - better answers
 
-- [x] **MCP server over `graph.json`** (built, unreleased). `codegraph mcp` lets Claude, Cursor and other
+- [x] **MCP server over `graph.json`** (built, 0.3.0). `codegraph mcp` lets Claude, Cursor and other
   assistants query the graph directly (`search`, `show`, `impact`, `path`, `source`) instead of shelling out and
   reading text. See the [agents guide](agents.md#mcp-server-the-graph-as-tools).
 - **Link more of what's there** (M-L). A typical first run resolves about 40% of all references. Targets:

@@ -80,8 +80,8 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
 `db:<object>`, `col:<table>.<column>` (kind `column`), `route:<repo>:<path>` (client routes, Parsers/JsRoutes.cs), `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
-uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, uses_value, reads, writes,
-executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in.
+uses_type, inherits, implements, overrides, calls_native, includes, imports, uses_component, calls_api, renders, mentions, uses_value, reads, writes,
+executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in, routes_to, redirects_to, links_to, opens.
 
 ## Working on the tool
 - No runtime NuGet packages; everything must work under Native AOT. JSON: source-generated contexts or
