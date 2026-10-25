@@ -126,7 +126,8 @@ public sealed class McpServer(string graphPath, string reportPath)
             {
                 ["query"] = Str("Text to look for, e.g. a table, routine, file, project or route name."),
                 ["kind"] = Str("Only this node kind, e.g. project, file, class, method, sub, function, form, " +
-                               "db_table, db_proc, db_view, db_function, route, item."),
+                               "db_table, db_proc, db_view, installer, release, or a kind from your own file " +
+                               "formats (e.g. report). An unknown kind lists the kinds in the graph."),
                 ["repo"] = Str("Only nodes from this repository."),
                 ["limit"] = Int("Most results to return.", 25),
             }, "query"),
@@ -159,11 +160,14 @@ public sealed class McpServer(string graphPath, string reportPath)
                 ["depth"] = Int("How many steps to follow.", 3),
             }, "name"),
         Tool("path",
-            "The shortest chain of dependencies connecting two nodes, in either direction.",
+            "The shortest chain connecting two nodes. A one-way chain (from uses ... to, or to uses ... from) is " +
+            "preferred; a chain that changes direction (both use the same thing) is only returned when there is " +
+            "none, and is marked as such.",
             new JsonObject
             {
                 ["from"] = Str("First node: name, path or id."),
                 ["to"] = Str("Second node: name, path or id."),
+                ["max_len"] = Int("Longest chain to look for, in steps.", 8),
             }, "from", "to"),
         Tool("source",
             "The source lines of a routine, type, database object or file, read from the repository on disk, with " +
@@ -175,9 +179,13 @@ public sealed class McpServer(string graphPath, string reportPath)
                 ["max_lines"] = Int("Most lines to return.", 200),
             }, "name"),
         Tool("report",
-            "The build report: repositories, counts, how many references were resolved, unmatched API calls, " +
-            "orphan files and parse errors.",
-            new JsonObject()),
+            "The build report. Without a section: the summary (counts, languages, how many references were " +
+            "resolved) and the list of sections, e.g. projects, unused database objects, procedures called but " +
+            "not found, orphan files, projects with missing members.",
+            new JsonObject
+            {
+                ["section"] = Str("Section to return: any part of its heading, e.g. \"orphan\" or \"not found\"."),
+            }),
     ]);
 
     private static JsonObject Tool(string name, string description, JsonObject props, params string[] required) => new()
@@ -208,14 +216,13 @@ public sealed class McpServer(string graphPath, string reportPath)
         {
             "search" => Search,
             "show" => a => Query(w => GraphQuery.Show(Current(), Pick(a, "name"), w, Num(a, "limit", 40, 1, 1000),
-                Text(a, "relation"), Direction(a), ids: true)),
-            "impact" => a => Query(w => GraphQuery.Impact(Current(), Pick(a, "name"), w, Num(a, "depth", 3, 1, 10))),
-            "path" => a => Query(w => GraphQuery.Path(Current(), Pick(a, "from"), Pick(a, "to"), w)),
+                Relation(a), Direction(a), ids: true)),
+            "impact" => a => Query(w => GraphQuery.Impact(Current(), Pick(a, "name"), w, Num(a, "depth", 3, 1, 10), ids: true)),
+            "path" => a => Query(w => GraphQuery.Path(Current(), Pick(a, "from"), Pick(a, "to"), w,
+                Num(a, "max_len", 8, 1, 20), ids: true)),
             "source" => a => Query(w => GraphQuery.Source(Current(), Pick(a, "name"), w, Num(a, "context", 0, 0, 200),
                 Num(a, "max_lines", 200, 1, 2000))),
-            "report" => _ => File.Exists(reportPath)
-                ? File.ReadAllText(reportPath)
-                : throw new ToolException($"No report yet at {reportPath}. Run:  codegraph build"),
+            "report" => Report,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
         string text;
@@ -291,12 +298,52 @@ public sealed class McpServer(string graphPath, string reportPath)
     private static string Need(JsonObject a, string key) =>
         Text(a, key) ?? throw new ToolException($"Missing argument: {key}");
 
+    /// <summary>An integer argument; below <paramref name="min"/> is an error, above <paramref name="max"/> is capped.</summary>
     private static int Num(JsonObject a, string key, int def, int min, int max)
     {
-        int n = def;
-        if (a[key] is JsonValue v && !v.TryGetValue(out n) && !(v.TryGetValue(out string? s) && int.TryParse(s, out n)))
-            n = def;
-        return Math.Clamp(n, min, max);
+        if (a[key] is null) return def;
+        if (a[key] is not JsonValue v || !(v.TryGetValue(out int n) || (v.TryGetValue(out string? s) && int.TryParse(s, out n))))
+            throw new ToolException($"{key} must be a whole number");
+        if (n < min) throw new ToolException($"{key} must be at least {min} (got {n})");
+        return Math.Min(n, max);
+    }
+
+    /// <summary>The relation argument, checked against the relations in the graph.</summary>
+    private string? Relation(JsonObject a)
+    {
+        string? rel = Text(a, "relation");
+        if (rel is null) return null;
+        var g = Current();
+        if (_relations is null || _relationsOf != g)
+        {
+            _relations = g.Edges.Select(e => e.Relation).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            _relationsOf = g;
+        }
+        return _relations.Contains(rel)
+            ? rel
+            : throw new ToolException($"Unknown relation '{rel}'. Relations in the graph: " +
+                                      string.Join(", ", _relations.Order(StringComparer.Ordinal)));
+    }
+
+    private HashSet<string>? _relations;
+    private Graph? _relationsOf;
+
+    /// <summary>The report's summary plus a list of sections, or the one section whose heading contains the text.</summary>
+    private string Report(JsonObject a)
+    {
+        if (!File.Exists(reportPath)) throw new ToolException($"No report yet at {reportPath}. Run:  codegraph build");
+        var lines = File.ReadAllLines(reportPath);
+        var heads = Enumerable.Range(0, lines.Length).Where(i => lines[i].StartsWith("## ", StringComparison.Ordinal)).ToList();
+        string Section(int k) => string.Join("\n", lines[heads[k]..(k + 1 < heads.Count ? heads[k + 1] : lines.Length)]).TrimEnd() + "\n";
+        string Titles() => string.Join("\n", heads.Select(h => "  " + lines[h][3..]));
+        string? want = Text(a, "section");
+        if (want is null)
+        {
+            string head = string.Join("\n", lines[..(heads.Count > 0 ? heads[0] : lines.Length)]).TrimEnd() + "\n\n";
+            return head + (heads.Count > 0 ? Section(0) : "") + "\nSections (call again with section):\n" + Titles() + "\n";
+        }
+        int found = heads.FindIndex(h => lines[h].Contains(want, StringComparison.OrdinalIgnoreCase));
+        return found >= 0 ? Section(found) : throw new ToolException($"No section matches '{want}'. Sections:\n{Titles()}");
     }
 
     private static string Direction(JsonObject a) => Text(a, "direction")?.ToLowerInvariant() switch
@@ -313,7 +360,7 @@ public sealed class McpServer(string graphPath, string reportPath)
         int end = text.LastIndexOf('\n', MaxChars);
         if (end < MaxChars / 2) end = MaxChars;
         return text[..end] + $"\n... output cut at {end:N0} of {text.Length:N0} characters; narrow the query " +
-               "(relation, direction, depth, limit).";
+               "with the tool's parameters.";
     }
 
     /// <summary>The graph, loaded again when graph.json has changed since the last call.</summary>

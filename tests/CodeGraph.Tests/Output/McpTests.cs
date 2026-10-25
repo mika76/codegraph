@@ -105,11 +105,39 @@ public sealed class McpTests : IDisposable
         var show = Call(s, "show", new JsonObject { ["name"] = "Orders", ["relation"] = "writes", ["direction"] = "in" }).Text;
         Assert.Contains("writes (2):", show);
         Assert.Contains($"{{{SampleGraph.Save}}}", show);
-        Assert.Contains("Sales/modDb.bas: Load", Call(s, "impact", new JsonObject { ["name"] = "db:Orders" }).Text);
+        Assert.Contains($"Sales/modDb.bas  {{{SampleGraph.FDb}}}: Load", Call(s, "impact", new JsonObject { ["name"] = "db:Orders" }).Text);
         Assert.Contains("--executes--> usp_Save", Call(s, "path", new JsonObject { ["from"] = "frmMain.Save", ["to"] = "usp_Save" }).Text);
         Assert.True(Call(s, "report").IsError);
-        File.WriteAllText(ReportPath, "# Report\n");
-        Assert.Equal(("# Report\n", false), Call(s, "report"));
+    }
+
+    [Fact]
+    public void Report_returns_the_summary_or_one_section()
+    {
+        var s = Server();
+        File.WriteAllText(ReportPath,
+            "# Report\n\n## Summary\n\n- files: 3\n\n## Orphan source files (1)\n\n- Old.bas\n\n## Projects with missing members (1)\n\n### Order Entry (1)\n- Gone.bas\n");
+        Assert.Equal(
+            "# Report\n\n## Summary\n\n- files: 3\n\nSections (call again with section):\n  Summary\n" +
+            "  Orphan source files (1)\n  Projects with missing members (1)\n", Call(s, "report").Text);
+        Assert.Equal("## Projects with missing members (1)\n\n### Order Entry (1)\n- Gone.bas\n",
+            Call(s, "report", new JsonObject { ["section"] = "missing" }).Text);
+        var (text, err) = Call(s, "report", new JsonObject { ["section"] = "nope" });
+        Assert.True(err);
+        Assert.StartsWith("No section matches 'nope'. Sections:\n  Summary\n", text);
+    }
+
+    [Fact]
+    public void Bad_relations_and_numbers_are_tool_errors()
+    {
+        var s = Server();
+        var (text, err) = Call(s, "show", new JsonObject { ["name"] = "Orders", ["relation"] = "bogus" });
+        Assert.True(err);
+        Assert.Equal("Unknown relation 'bogus'. Relations in the graph: calls, contains, executes, writes", text);
+        Assert.False(Call(s, "show", new JsonObject { ["name"] = "Orders", ["relation"] = "WRITES" }).IsError);
+        Assert.Equal(("depth must be at least 1 (got -1)", true), Call(s, "impact", new JsonObject { ["name"] = "Orders", ["depth"] = -1 }));
+        Assert.Equal(("limit must be a whole number", true), Call(s, "search", new JsonObject { ["query"] = "x", ["limit"] = "many" }));
+        Assert.Contains("(up to 10 steps)", Call(s, "impact", new JsonObject { ["name"] = "Orders", ["depth"] = 99 }).Text);
+        Assert.Contains("within 2 steps", Call(s, "path", new JsonObject { ["from"] = "Unused", ["to"] = "Orders", ["max_len"] = 2 }).Text);
     }
 
     [Fact]

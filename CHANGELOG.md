@@ -13,7 +13,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🤖 **MCP server**: `codegraph mcp` serves the graph to AI assistants (Claude Code, Cursor, VS Code, ...) over
   stdio, with read-only tools `search`, `show` (filter by relation and direction), `impact`, `path`, `source`
   (a definition's code with line numbers) and `report`. Results carry node ids. An ambiguous name returns its
-  candidates instead of a guess, and the graph is reloaded after each `codegraph build`. Setup is in
+  candidates instead of a guess, an unknown relation or kind lists the valid ones, `report` returns the summary or
+  one section, and the graph is reloaded after each `codegraph build`. Setup is in
   `docs/agents.md`.
 
 ### 🔄 Changed

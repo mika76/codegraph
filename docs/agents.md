@@ -43,9 +43,9 @@ files that the `source` tool shows.
 | `search` | `query`, `kind?`, `repo?`, `limit?` | matching nodes with their ids: exact matches first, then names starting with the text |
 | `show` | `name`, `relation?`, `direction?` (`in`/`out`/`both`), `limit?` | the node and its connections, each with the neighbour's id; e.g. who writes a table: `relation=writes, direction=in` |
 | `impact` | `name`, `depth?` | everything that depends on it, grouped by project and file |
-| `path` | `from`, `to` | the shortest chain connecting two nodes |
+| `path` | `from`, `to`, `max_len?` | the shortest chain connecting two nodes; one-way chains first, a chain that changes direction only as a marked fallback |
 | `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
-| `report` | - | `GRAPH_REPORT.md` |
+| `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
 
 Every `name` can also be a node id; ids are printed in `{braces}`. A name that matches several things returns the
 candidates with their ids instead of guessing, and the agent calls again with the id it means. The server loads
