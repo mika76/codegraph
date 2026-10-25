@@ -28,6 +28,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🔓 `publish.ps1` no longer fails while `codegraph mcp` is running: the locked exe is renamed to
+  `codegraph.old-*.exe` (removed on a later run) and the new one is copied next to it.
 - 🔧 C++ projects take their output file from the linker settings - `/out:` in `.dsp`, the linker's `OutputFile` in
   `.vcproj` and `.vcxproj` (or `TargetName` + `TargetExt`), Release configuration first. An ActiveX control linked as
   `.ocx` is now an `ocx` project and matches the installers and VB6 references that use it.
