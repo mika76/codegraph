@@ -43,6 +43,23 @@ public class DbAccessTests
     }
 
     [Fact]
+    public void Entity_framework_function_imports_are_database_access()
+    {
+        var f = Parse("Model.Context.cs", """
+            public partial class Entities : DbContext
+            {
+                public virtual ObjectResult<Rate_Result> Rate_List()
+                {
+                    return ((IObjectContextAdapter)this).ObjectContext.ExecuteFunction<Rate_Result>("Rate_List");
+                }
+                public int Purge() => Database.ExecuteSqlCommand("cleanup");
+            }
+            """);
+        Assert.True(Marked(f, "rate_list"));
+        Assert.True(Marked(f, "cleanup"));
+    }
+
+    [Fact]
     public void Vb6_marks_ado_execute_and_recordsets()
     {
         var f = Parse("modData.bas", """

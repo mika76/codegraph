@@ -18,7 +18,9 @@ public static partial class DbAccess
                     @"OpenRecordset|Recordset|CreateQueryDef|rdoConnection|rdoQuery|rdoResultset|" +
                     @"_CommandPtr|_RecordsetPtr|_ConnectionPtr|" +
                     @"(?:Sql|OleDb|Odbc|Oracle|Npgsql|MySql|Sqlite|SQLite|Db|IDb)(?:Command|DataAdapter|Connection)|" +
-                    @"Execute(?:Reader|NonQuery|Scalar|SqlRaw|SqlInterpolated)(?:Async)?|" +
+                    // ADO.NET, EF Core, EF6 (ExecuteFunction, ExecuteStore*, ExecuteSqlCommand), LINQ to SQL
+                    @"Execute(?:Reader|NonQuery|Scalar|SqlRaw|SqlInterpolated|SqlCommand|Function|StoreQuery|" +
+                    @"StoreCommand|MethodCall)(?:Async)?|" +
                     @"FromSql(?:Raw|Interpolated)?|SqlQuery|SQLExecDirect|SQLPrepare|" +
                     @"Invoke-Sqlcmd|Invoke-DbaQuery|sqlcmd|osql|isql|" +
                     @"mssql|tedious|oracledb|callproc)\b", RegexOptions.IgnoreCase)]

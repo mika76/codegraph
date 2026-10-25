@@ -49,7 +49,7 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🗃️ SQL functions are found under any schema (`sales.net_total(...)`), not just `dbo`, and a string naming a
   schema-qualified object (`"sales.GetOrders"`) links to it.
 - 🎯 A string that only names a stored procedure (`"GetOrders"`, `"cleanup"`) counts as a call only where the
-  surrounding routine uses a database API - ADO, ADO.NET, ODBC, EF raw SQL, `sqlcmd`/`Invoke-Sqlcmd`, node
+  surrounding routine uses a database API - ADO, ADO.NET, ODBC, Entity Framework, LINQ to SQL, `sqlcmd`/`Invoke-Sqlcmd`, node
   `mssql`/`oracledb` - or when it has one of your `proc_prefixes`. A word like `"test"` in UI code no longer links
   to a procedure that happens to share its name. Works for any naming style.
 - 🏷️ A module that both a release branch and `releases.json` put in the same release is counted once (it showed
