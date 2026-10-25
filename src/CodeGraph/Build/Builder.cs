@@ -824,7 +824,9 @@ public sealed partial class Builder
                         Inc(_unresolved, "api:" + ((verb ?? "").ToUpperInvariant() + " /" + name).Trim());
                     return false;
                 }
-                return EdgeToTargets(caller, hits, "calls_api", lineAttr, ("via", XStr(rf.Extra, "raw")));
+                // a link the user follows only leads to the page: links_to, which impact does not follow
+                string apiRel = rf.Extra?["navigation"] is not null ? "links_to" : "calls_api";
+                return EdgeToTargets(caller, hits, apiRel, lineAttr, ("via", XStr(rf.Extra, "raw")));
             }
             case "cs_type":
                 return EdgeToTargets(caller, Pick(fid, _typeIndex.GetValueOrDefault(("cs", LastPart(name).ToLowerInvariant())) ?? []),

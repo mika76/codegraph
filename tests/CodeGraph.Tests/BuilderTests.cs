@@ -340,6 +340,23 @@ public class BuilderTests
     }
 
     [Fact]
+    public void A_navigation_link_is_links_to_and_impact_does_not_follow_it()
+    {
+        var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("MainController", "class"), Sym("Index", "method", "MainController")] };
+        var view = new FileFacts { Lang = "razor", Symbols = [Sym("Settings", "view")] };
+        var link = new Ref { Kind = "endpoint", Name = "main/index", FromParent = "Settings", Line = 1 };
+        link.X["conventional"] = true;
+        link.X["navigation"] = true;
+        view.Refs.Add(link);
+        var g = Build(Cfg("Web"), Rec("Controllers/MainController.cs", ctl, "Web", "C:/repos/Web"), Rec("Views/Settings/Settings.cshtml", view, "Web", "C:/repos/Web"));
+        Assert.True(HasEdge(g, "sym:Web:Views/Settings/Settings.cshtml#Settings", "sym:Web:Controllers/MainController.cs#MainController.Index", "links_to"));
+        Assert.DoesNotContain(g.Edges, e => e.Relation == "calls_api");
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "MainController.Index", w, depth: 3);
+        Assert.Contains("0 things", w.ToString());
+    }
+
+    [Fact]
     public void Url_action_never_links_to_another_apps_controller()
     {
         var api = new FileFacts { Lang = "csharp", Symbols = [Sym("ReportsController", "class"), Sym("Run", "method", "ReportsController")] };

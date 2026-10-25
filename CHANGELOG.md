@@ -118,6 +118,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   wrapper such as `orders.create('/orders')` - links when it matches a server route, and is not listed as an
   unmatched call when it doesn't. Router navigation (`router.push`, `navigateTo`, ...) is never an API call, and
   paths like `/2fa/verify` or `/:id/edit` are recognised.
+- 🔗 Razor: a link the user follows (`<a href="@Url.Action(...)">`, `Html.ActionLink`, `<a asp-action>`,
+  `location.href = ...`) is `links_to`, not `calls_api`, and `impact` does not follow it - a breadcrumb to the
+  dashboard no longer makes every page depend on the dashboard's data. Ajax / fetch URLs, forms and child actions
+  stay `calls_api`.
 - 🧩 `Url.Action("Edit", "Orders")` in Razor views links to `OrdersController.Edit` by name, also when the action
   has an attribute route that looks different, and never to a controller in another repository.
 - 🔗 Front-end calls match API routes whatever the base path (`/api`, `/v1`, `/backend/api`, or a prefix only the

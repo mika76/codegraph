@@ -31,6 +31,10 @@ public static partial class RazorParser
     [GeneratedRegex(@"<script\b([^>]*)>(.*?)</script\s*>", Ic | RegexOptions.Singleline)] private static partial Regex ScriptRe();
     [GeneratedRegex(@"^[ \t]*@(model|inherits)[ \t]+([^\r\n]+)", Cv | RegexOptions.Multiline)] private static partial Regex DirectiveRe();
     [GeneratedRegex(@"\bUrl\.Action\s*\(", Cv)] private static partial Regex UrlAction();
+    // what precedes @Url.Action(...) when it is a link: href="  or  location = '  /  location.href = "
+    [GeneratedRegex(@"(?:\bhref\s*=\s*[""']?|\blocation(?:\.href)?\s*=\s*[""']?|\.attr\(\s*[""']href[""']\s*,\s*[""']?)\s*@?$", Cv | RegexOptions.IgnoreCase)]
+    private static partial Regex NavigationBefore();
+    [GeneratedRegex(@"^<a\b", Cv | RegexOptions.IgnoreCase)] private static partial Regex AnchorTag();
     [GeneratedRegex(@"\b(?:Html|Ajax)\.ActionLink\s*\(", Cv)] private static partial Regex ActionLink();
     [GeneratedRegex(@"\b(?:Html|Ajax)\.BeginForm\s*\(", Cv)] private static partial Regex BeginForm();
     [GeneratedRegex(@"\bHtml\.(?:Render)?Action\s*\(", Cv)] private static partial Regex RenderAction();
@@ -223,22 +227,29 @@ public static partial class RazorParser
         var local = new Dictionary<(string, string), Ref>();
         var localOrder = new List<Ref>();
 
-        void Add(int pos, string kind, string nm, bool conventional = false)
+        void Add(int pos, string kind, string nm, bool conventional = false, bool navigation = false)
         {
             var key = (kind, nm);
-            if (local.ContainsKey(key)) return;
+            if (local.TryGetValue(key, out var seen))
+            {
+                if (!navigation) seen.Extra?.Remove("navigation"); // also called, not only linked to
+                return;
+            }
             var r = new Ref { From = null, FromParent = stem, Kind = kind, Name = nm, Line = li.Line(pos) };
             if (conventional) r.X["conventional"] = true;
+            if (navigation) r.X["navigation"] = true;
             local[key] = r;
             localOrder.Add(r);
         }
 
-        void Endpoint(int pos, string? action, string? ctrl)
+        // a link the user follows (<a href>, ActionLink, location = ...) only navigates to the page; ajax / fetch
+        // url:, forms and child actions run the action for this view
+        void Endpoint(int pos, string? action, string? ctrl, bool navigation = false)
         {
             ctrl = string.IsNullOrEmpty(ctrl) ? defaultCtrl : ctrl;
             if (string.IsNullOrEmpty(action) || string.IsNullOrEmpty(ctrl)) return;
             // normalised like every other endpoint (the Python kept "/Ctrl/Action", which never matched a route)
-            Add(pos, "endpoint", Routes.Normalize($"/{ctrl}/{action}"), conventional: true);
+            Add(pos, "endpoint", Routes.Normalize($"/{ctrl}/{action}"), conventional: true, navigation: navigation);
         }
 
         foreach (Match m in DirectiveRe().Matches(clean))
@@ -249,12 +260,13 @@ public static partial class RazorParser
         foreach (Match m in UrlAction().Matches(clean))
         {
             var args = SplitArgs(clean, m.Index + m.Length - 1);
-            Endpoint(m.Index, Lit(Arg(args, 0)), Lit(Arg(args, 1)));
+            bool nav = NavigationBefore().IsMatch(clean[Math.Max(0, m.Index - 60)..m.Index]);
+            Endpoint(m.Index, Lit(Arg(args, 0)), Lit(Arg(args, 1)), nav);
         }
         foreach (Match m in ActionLink().Matches(clean))
         {
             var args = SplitArgs(clean, m.Index + m.Length - 1);
-            Endpoint(m.Index, Lit(Arg(args, 1)), Lit(Arg(args, 2)));
+            Endpoint(m.Index, Lit(Arg(args, 1)), Lit(Arg(args, 2)), navigation: true);
         }
         foreach (var rx in new[] { BeginForm(), RenderAction() })
             foreach (Match m in rx.Matches(clean))
@@ -268,8 +280,9 @@ public static partial class RazorParser
             var am = AspAction().Match(tag);
             var cm = AspController().Match(tag);
             if (AspDynamic().IsMatch(tag)) continue;
-            if (cm.Success && !am.Success) Endpoint(m.Index, "Index", cm.Groups[1].Value);
-            else if (am.Success) Endpoint(m.Index, am.Groups[1].Value, cm.Success ? cm.Groups[1].Value : null);
+            bool link = AnchorTag().IsMatch(tag); // <a asp-action> navigates; <form asp-action> posts
+            if (cm.Success && !am.Success) Endpoint(m.Index, "Index", cm.Groups[1].Value, link);
+            else if (am.Success) Endpoint(m.Index, am.Groups[1].Value, cm.Success ? cm.Groups[1].Value : null, link);
         }
         foreach (var rx in new[] { PartialCall(), PartialTag() })
             foreach (Match m in rx.Matches(clean))

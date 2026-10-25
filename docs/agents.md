@@ -148,7 +148,8 @@ It has three parts:
 - **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `calls_native`, `includes`,
   `imports`, `uses_component`, `calls_api`, `renders`, `mentions`, `uses_value` (enum members, constants),
   `reads`, `writes`, `executes`, `references` (foreign key), `triggers_on`, `defines`, `alters`, `depends_on`,
-  `uses_library`, `uses_code_of`, `ships`, `released_in`, `opens` (a VB6 form shown from code, or one of your
+  `uses_library`, `uses_code_of`, `ships`, `released_in`, `links_to` (a page link to an action - not followed by
+  `impact`), `opens` (a VB6 form shown from code, or one of your
   items named in code), and for your own formats `defined_in` and whatever relations your extractors name. `count` is how often it occurs; `line` the first place; `via` extra detail (e.g. `recordset`,
   `implementation`, the raw URL of an API call).
 

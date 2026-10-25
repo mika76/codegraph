@@ -32,6 +32,31 @@ public class RazorParserTests
         Assert.True(f.Refs.First(r => r.Kind == "endpoint").X["conventional"]!.GetValue<bool>());
         Assert.Equal(3, f.Refs.First(r => r.Kind == "endpoint").Line);
         Assert.Equal(["_Row", "_Foot"], f.Refs.Where(r => r.Kind == "partial").Select(r => r.Name));
+        // <a href>, ActionLink and <a asp-action> navigate; the form posts
+        var nav = f.Refs.Where(r => r.Kind == "endpoint" && r.X.ContainsKey("navigation")).Select(r => r.Name).ToList();
+        Assert.Equal(["items/edit", "home/details", "reports/show"], nav);
+    }
+
+    [Fact]
+    public void Ajax_and_script_urls_are_calls_links_are_navigation()
+    {
+        const string cshtml = """
+            <a href="@Url.Action("Index", "Main", new { id = 1 })">Dashboard</a>
+            <script>
+              $.ajax({ url: '@Url.Action("GetData", "Live")', type: 'POST' });
+              fetch('@Url.Action("Stats", "Live")');
+              window.location.href = '@Url.Action("Report", "Live")';
+              $('#x').attr('href', '@Url.Action("Help", "Main")');
+            </script>
+            <a href="@Url.Action("GetData", "Live")">raw data</a>
+            """;
+        var f = RazorParser.Parse("Web/Views/Main/Page.cshtml", cshtml);
+        bool Nav(string ep) => f.Refs.Single(r => r.Kind == "endpoint" && r.Name == ep).X.ContainsKey("navigation");
+        Assert.True(Nav("main/index"));
+        Assert.True(Nav("live/report"));
+        Assert.True(Nav("main/help"));
+        Assert.False(Nav("live/stats"));
+        Assert.False(Nav("live/getdata")); // ajax-called, and also linked: the call wins
     }
 
     [Fact]
