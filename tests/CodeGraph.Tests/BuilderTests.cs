@@ -549,6 +549,59 @@ public class BuilderTests
         Assert.DoesNotContain(g2.Edges, e => e.Source == "db:w" && e.Target.EndsWith(".id", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public void A_csharp_http_client_reaches_the_api_action()
+    {
+        var api = CodeGraph.Parsers.CSharpParser.Parse("Api/StatsController.cs", """
+            [Route("api/[controller]")]
+            public class StatsController : Controller
+            {
+                [HttpGet("MonthRevenue/{site}")] public decimal MonthRevenue(int site) => 0;
+            }
+            """);
+        var client = CodeGraph.Parsers.CSharpParser.Parse("Web/ApiClient.cs", """
+            class ApiClient
+            {
+                async Task<decimal> GetMonthRevenue(int site)
+                {
+                    string query = $"api/Stats/MonthRevenue/{site}";
+                    var response = await client.GetAsync(query);
+                    return 0;
+                }
+            }
+            """);
+        var g = Build(Cfg("Api", "Web"), Rec("Api/StatsController.cs", api, "Api", "C:/repos/Api"), Rec("Web/ApiClient.cs", client, "Web", "C:/repos/Web"));
+        Assert.True(HasEdge(g, "sym:Web:Web/ApiClient.cs#ApiClient.GetMonthRevenue", "sym:Api:Api/StatsController.cs#StatsController.MonthRevenue", "calls_api"));
+    }
+
+    [Fact]
+    public void A_csharp_dllimport_reaches_the_cpp_project_and_its_exported_function()
+    {
+        var cppProj = new FileFacts
+        {
+            Lang = "project",
+            Project = new ProjectInfo { Format = "dsp", Lang = "cpp", Name = "Rand", Type = "dll", Output = "Rand.dll", Members = ["rand.cpp"] },
+        };
+        var cpp = new FileFacts { Lang = "cpp", Symbols = [Sym("getNextNumber", "function")] };
+        var csProj = new FileFacts   // a .NET wrapper project with the same name
+        {
+            Lang = "project",
+            Project = new ProjectInfo { Format = "csproj", Lang = "csharp", Name = "Rand", Assembly = "Rand", Type = "dll", Output = "Rand.dll" },
+        };
+        var cs = CodeGraph.Parsers.CSharpParser.Parse("Wrapper/Native.cs", """
+            static class Native
+            {
+                [DllImport("Rand.dll")] public static extern uint getNextNumber();
+                [DllImport("Other.dll")] public static extern int Ping();
+            }
+            """);
+        var g = Build(Cfg("Shop"), Rec("Rand/Rand.dsp", cppProj), Rec("Rand/rand.cpp", cpp), Rec("Wrapper/Rand.csproj", csProj), Rec("Wrapper/Native.cs", cs));
+        const string Extern = "sym:Shop:Wrapper/Native.cs#Native.getNextNumber";
+        Assert.True(HasEdge(g, Extern, "sym:Shop:Rand/rand.cpp#getNextNumber", "calls_native"));
+        Assert.DoesNotContain(g.Edges, e => e.Source == Extern && e.Target == "proj:Shop:Wrapper/Rand.csproj");
+        Assert.True(HasEdge(g, "sym:Shop:Wrapper/Native.cs#Native.Ping", "ext:other.dll", "calls_native"));
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

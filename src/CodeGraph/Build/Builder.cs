@@ -977,7 +977,8 @@ public sealed partial class Builder
                 string lib = XStr(rf.Extra, "lib") ?? "";
                 string libStem = Paths.Stem(lib);
                 if (SystemDlls.Contains(libStem)) return false;
-                foreach (var pid in _projByOutput.GetValueOrDefault(libStem) ?? [])
+                // a native DLL comes from a C/C++ project (a .NET project of the same name is not it)
+                foreach (var pid in (_projByOutput.GetValueOrDefault(libStem) ?? []).Where(p => CanProvide("native", _projects.GetValueOrDefault(p)?.Info.Format)))
                 {
                     string fn = name.ToLowerInvariant();
                     var cands = new List<string>();

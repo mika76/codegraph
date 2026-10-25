@@ -40,6 +40,15 @@ public static partial class CSharpParser
     [GeneratedRegex(@"^\s*(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*(?:=\s*(\S[^,]*?))?\s*$", O)] private static partial Regex EnumMemberRe();
     [GeneratedRegex(@"(?:\b(public|private|protected|internal)\s+)?(?:(?:new|static|unsafe|protected|internal)\s+)*\bconst\s+[\w.<>?\[\]]+\s+([A-Za-z_]\w*)\s*=\s*([^;]+);", O)] private static partial Regex ConstRe();
     [GeneratedRegex(@"\[area\]/?", O)] private static partial Regex AreaRe();
+    [GeneratedRegex(@"\[\s*(?:System\.Runtime\.InteropServices\.)?DllImport(?:Attribute)?\s*\(\s*@?""([^""]+)""([^\]]*)\]", O)] private static partial Regex DllImportRe();
+    [GeneratedRegex(@"\G[^;{}]*?\bextern\s+[\w.<>\[\]?]+\s+([A-Za-z_]\w*)\s*\(", O)] private static partial Regex ExternMethodRe();
+    [GeneratedRegex(@"\bEntryPoint\s*=\s*""([^""]+)""", O)] private static partial Regex EntryPointRe();
+    // HttpClient / WebClient / RestSharp calls; group 1 is the verb when the method name says it
+    [GeneratedRegex(@"\.(?:(Get|Post|Put|Delete|Patch)(?:Async|StringAsync|ByteArrayAsync|StreamAsync|FromJsonAsync|AsJsonAsync)|SendAsync|DownloadString(?:TaskAsync)?|DownloadData(?:TaskAsync)?|UploadString(?:TaskAsync)?)\s*\(|\bnew\s+(?:RestRequest|HttpRequestMessage)\b", O)]
+    private static partial Regex HttpApiRe();
+    // a path: api/x/{id}, /orders, https://host/x?y=1 - at least one '/' between segments, or a leading '/'
+    [GeneratedRegex(@"^(?:https?://[^/\s]+)?(?:/?[\w{~][\w.\-{}:~]*(?:/[\w.\-{}:~]*)+|/[\w{][\w.\-{}]*)/?(?:\?\S*)?$", O)]
+    private static partial Regex UrlLikeRe();
     [GeneratedRegex(@"^[ \t]*#[ \t]*(?:region|endregion|if|elif|else|endif|pragma|define|undef|nullable|line|warning|error)\b[^\r\n]*", O | RegexOptions.Multiline)]
     private static partial Regex PreprocessorLine();
 
@@ -480,6 +489,18 @@ public static partial class CSharpParser
 
         foreach (var me in methods)
             refs.AddRange(BodyRefs(me.Name, me.Type.Qual, me.BodyStart, me.BodyEnd, me.Params));
+        // [DllImport("X.dll", EntryPoint = "f")] static extern T Name(...): a native call, like a VB6 Declare
+        foreach (Match dm in DllImportRe().Matches(text))
+        {
+            var em = ExternMethodRe().Match(code, dm.Index + dm.Length);
+            if (!em.Success || em.Index - (dm.Index + dm.Length) > 300) continue;
+            string method = em.Groups[1].Value;
+            string entry = EntryPointRe().Match(dm.Groups[2].Value) is { Success: true } ep ? ep.Groups[1].Value : method;
+            var owner = types.Where(t => t.Open < em.Index && em.Index < t.Close).MaxBy(t => t.Open);
+            var r = new Ref { From = method, FromParent = owner?.Qual, Kind = "native", Name = entry, Line = li.Line(em.Index) };
+            r.X["lib"] = dm.Groups[1].Value;
+            refs.Add(r);
+        }
         foreach (var tq in fieldOrder)
             foreach (var t in fieldTypes[tq].Values.Distinct())
                 if (t.Length > 0 && !IsKeyword(t))
@@ -521,6 +542,28 @@ public static partial class CSharpParser
                 foreach (var (mode, nm) in SqlText.Refs(joined).OrderBy(r => r.Mode, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal))
                     refs.Add(new Ref { From = owner, FromParent = parent, Kind = "sql", Mode = mode, Name = nm, Line = line });
                 refs.AddRange(SqlText.ColumnRefs(joined, owner, parent, _ => line));
+            }
+            // a method that calls a .NET HTTP API (HttpClient, WebClient, RestSharp): its URL-shaped strings are API
+            // calls - candidates, linked only when they match a route (string query = $"api/x"; client.GetAsync(query))
+            if (key.IsMethod && OwnerAt(items[0].Offset) is { } hm
+                && HttpApiRe().Matches(Sub(code, hm.BodyStart, hm.BodyEnd + 1)) is { Count: > 0 } http)
+            {
+                var verbs = http.Select(h => h.Groups[1].Success ? h.Groups[1].Value.ToLowerInvariant()
+                    : h.Value.Contains("Download", StringComparison.Ordinal) ? "get"
+                    : h.Value.Contains("Upload", StringComparison.Ordinal) ? "post" : null).Distinct().ToList();
+                string? verb = verbs.Count == 1 ? verbs[0] : null;
+                foreach (var it in items)
+                {
+                    string v = it.Value.Trim();
+                    if (!UrlLikeRe().IsMatch(v) || !v.Any(char.IsLetter)) continue;
+                    string route = Routes.Normalize(v);
+                    if (route.Length == 0 || route.Split('/').All(seg => seg == "{}")) continue;
+                    var er = new Ref { From = owner, FromParent = parent, Kind = "endpoint", Name = route, Line = li.Line(it.Offset) };
+                    er.X["candidate"] = true;
+                    if (verb is not null) er.X["verb"] = verb;
+                    er.X["raw"] = v.Length > 120 ? v[..120] : v;
+                    refs.Add(er);
+                }
             }
             foreach (var it in items)
             {

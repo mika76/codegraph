@@ -92,6 +92,12 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   declared.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
+- 🔌 C#: `[DllImport("X.dll")] static extern` is a native call like a VB6 `Declare`: it links to the C/C++ project
+  that builds `X.dll` and to the exported function (`EntryPoint` honoured), or to the external library - so "who uses
+  this native DLL / function?" covers C# too. A .NET project of the same name is never taken for the native DLL.
+- 🌐 C#: calls to an API over `HttpClient` / `WebClient` / RestSharp link to the controller action, also when the
+  path is built first (`string query = $"api/Stats/{id}"; client.GetAsync(query)`) - matched against the routes
+  like front-end calls, with the verb taken from `GetAsync` / `PostAsync` / ...
 - 🧩 C#: type arguments of generic calls are type uses - `services.AddScoped<IOrders, Orders>()` links the startup code
   to both types ("where is this wired up?"), `Query<OrderRow>(...)` to `OrderRow`.
 - 🧬 A method that implements an interface method links to it (`implements`), an override to the base method

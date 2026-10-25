@@ -166,6 +166,54 @@ public class CSharpParserTests
     }
 
     [Fact]
+    public void HttpClient_calls_are_endpoint_candidates()
+    {
+        var f = CSharpParser.Parse("ApiClient.cs", """
+            class ApiClient
+            {
+                async Task<decimal> GetMonthRevenue(int site)
+                {
+                    string query = $"api/Stats/MonthRevenue/{site}";
+                    var response = await client.GetAsync(query);
+                    return 0;
+                }
+                async Task Save(Order o) { await client.PostAsJsonAsync("/orders", o); }
+                string Title() { return "Reports/Monthly"; }                       // no HTTP call here
+                async Task Send() { var c = new StringContent(x, Encoding.UTF8, "application/json"); await client.SendAsync(req); }
+            }
+            """);
+        var eps = f.Refs.Where(r => r.Kind == "endpoint").ToList();
+        var month = eps.Single(r => r.From == "GetMonthRevenue");
+        Assert.Equal("api/stats/monthrevenue/{}", month.Name);
+        Assert.Equal("get", (string)month.X["verb"]!);
+        Assert.True(month.X.ContainsKey("candidate"));
+        Assert.Equal("post", (string)eps.Single(r => r.From == "Save").X["verb"]!);
+        Assert.DoesNotContain(eps, r => r.From == "Title");
+        Assert.All(eps.Where(r => r.From == "Send"), r => Assert.False(r.X.ContainsKey("verb"))); // SendAsync: verb unknown
+    }
+
+    [Fact]
+    public void DllImport_externs_are_native_calls()
+    {
+        var f = CSharpParser.Parse("Native.cs", """
+            using System.Runtime.InteropServices;
+            static class Native
+            {
+                [DllImport("Rand.dll")]
+                public static extern uint getNextNumber();
+                [DllImport("Licence.dll", EntryPoint = "CheckLic", CharSet = CharSet.Ansi)]
+                internal static extern int Check(string key);
+                [System.Runtime.InteropServices.DllImport(@"kernel32.dll")] static extern int GetTickCount();
+            }
+            """);
+        var natives = f.Refs.Where(r => r.Kind == "native").ToList();
+        Assert.Contains(natives, r => r is { From: "getNextNumber", FromParent: "Native", Name: "getNextNumber" } && (string)r.X["lib"]! == "Rand.dll");
+        Assert.Contains(natives, r => r is { From: "Check", Name: "CheckLic" } && (string)r.X["lib"]! == "Licence.dll");
+        Assert.Contains(natives, r => r is { From: "GetTickCount" } && (string)r.X["lib"]! == "kernel32.dll");
+        Assert.Contains(f.Symbols, s => s.Name == "getNextNumber" && s.Parent == "Native");
+    }
+
+    [Fact]
     public void Generic_call_arguments_are_type_uses()
     {
         var f = CSharpParser.Parse("Startup.cs", """
