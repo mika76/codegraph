@@ -86,6 +86,10 @@ public class QueryTests
         Assert.Equal([SampleGraph.TMod, SampleGraph.FDb, SampleGraph.Load],
             GraphQuery.Search(g, "moddb", repo: "shop"));
         Assert.Empty(GraphQuery.Search(g, "orders", repo: "Shop"));
+        // a name starting with the text beats one that only contains it
+        g.Node("db:BorderStyles", ("kind", "db_table"), ("name", "BorderStyles"));
+        g.Node("db:OrdersArchive", ("kind", "db_table"), ("name", "OrdersArchive"));
+        Assert.Equal(["db:Orders", "db:OrdersArchive", "db:BorderStyles"], GraphQuery.Search(g, "orders"));
     }
 
     [Fact]

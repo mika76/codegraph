@@ -97,21 +97,27 @@ public static class GraphQuery
 
     /// <summary>
     /// Nodes whose name/qual/path/id contains the text (case-insensitive), optionally of one kind and repo. Exact
-    /// matches come first, then by kind rank and id length.
+    /// matches come first, then names starting with the text, names containing it, paths/ids containing it; within
+    /// each by kind rank and id length.
     /// </summary>
     public static List<string> Search(Graph g, string text, string? kind = null, string? repo = null)
     {
         string low = text.Trim().ToLowerInvariant();
-        var hits = new List<(string Id, bool Exact, int Rank)>();
+        var hits = new List<(string Id, int Tier, int Rank)>();
         foreach (var n in g.Nodes)
         {
             if (!string.IsNullOrEmpty(kind) && !string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrEmpty(repo) && !string.Equals(RepoOf(n), repo, StringComparison.OrdinalIgnoreCase)) continue;
-            string[] cands = [Low(n.Str("name")), Low(n.Str("qual")), Low(n.Str("path")), n.Id.ToLowerInvariant()];
-            if (cands.Contains(low)) hits.Add((n.Id, true, Rank(n)));
-            else if (cands.Any(c => c.Length > 0 && c.Contains(low, StringComparison.Ordinal))) hits.Add((n.Id, false, Rank(n)));
+            string name = Low(n.Str("name")), qual = Low(n.Str("qual")), path = Low(n.Str("path")), id = n.Id.ToLowerInvariant();
+            int tier =
+                name == low || qual == low || path == low || id == low ? 0
+                : name.StartsWith(low, StringComparison.Ordinal) ? 1
+                : name.Contains(low, StringComparison.Ordinal) || qual.Contains(low, StringComparison.Ordinal) ? 2
+                : path.Contains(low, StringComparison.Ordinal) || id.Contains(low, StringComparison.Ordinal) ? 3
+                : -1;
+            if (tier >= 0) hits.Add((n.Id, tier, Rank(n)));
         }
-        return hits.OrderBy(h => h.Exact ? 0 : 1).ThenBy(h => h.Rank).ThenBy(h => h.Id.Length)
+        return hits.OrderBy(h => h.Tier).ThenBy(h => h.Rank).ThenBy(h => h.Id.Length)
             .ThenBy(h => h.Id, StringComparer.Ordinal).Select(h => h.Id).ToList();
     }
 

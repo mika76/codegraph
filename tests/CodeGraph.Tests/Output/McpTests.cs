@@ -55,6 +55,13 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void Output_lines_keep_quotes_and_unicode_readable()
+    {
+        var line = McpServer.ToLine(new JsonObject { ["text"] = "'a' `b` <c> é\n\"d\"" });
+        Assert.Equal("""{"text":"'a' `b` <c> é\n\"d\""}""", line);
+    }
+
+    [Fact]
     public void Protocol_errors()
     {
         var s = Server();

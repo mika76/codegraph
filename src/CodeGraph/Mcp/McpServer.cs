@@ -37,10 +37,19 @@ public sealed class McpServer(string graphPath, string reportPath)
             if (line.Trim().Length == 0) continue;
             var reply = Handle(line);
             if (reply is null) continue;
-            output.Write(reply.ToJsonString());
+            output.Write(ToLine(reply));
             output.Write('\n');
             output.Flush();
         }
+    }
+
+    /// <summary>Compact JSON without escaping quotes, backticks or non-ASCII text (control characters still are).</summary>
+    internal static string ToLine(JsonNode node)
+    {
+        using var ms = new MemoryStream();
+        using (var w = new Utf8JsonWriter(ms, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
+            node.WriteTo(w);
+        return System.Text.Encoding.UTF8.GetString(ms.ToArray());
     }
 
     /// <summary>The response to one message, or null for notifications and responses.</summary>
