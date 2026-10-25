@@ -227,6 +227,41 @@ public class BuilderTests
         Assert.Equal(1, r.Unresolved["api:/nothing/here"]);
     }
 
+    [Theory]
+    [InlineData("api/inventory/items/{}", "inventory/items/{}")]     // client adds /api
+    [InlineData("v2/inventory/items/{}", "inventory/items/{}")]      // client adds a version
+    [InlineData("backend/api/inventory/items", "inventory/items")]   // two segments
+    [InlineData("inventory/items/{}", "svc/v1/inventory/items/{}")]  // the server has the base path
+    [InlineData("inventory/items", "inventory/items")]
+    public void Api_calls_match_routes_across_base_paths(string called, string route)
+    {
+        var r = MatchOne(called, route);
+        Assert.NotNull(r.Graph.GetEdge("file:StaffApp:src/api.ts", "sym:Api:Api/InventoryController.cs#InventoryController.Items", "calls_api"));
+    }
+
+    [Theory]
+    [InlineData("orders/{}", "{}")]              // only a parameter left after dropping 'orders'
+    [InlineData("api/orders/{}", "stock/{}")]
+    [InlineData("a/b/c/d/orders", "orders")]     // more than three extra segments
+    [InlineData("orders", "orders/{}")]          // dropping the route's 'orders' leaves only a parameter
+    public void Api_calls_do_not_match_on_parameters_or_unrelated_paths(string called, string route)
+    {
+        var r = MatchOne(called, route);
+        Assert.Null(r.Graph.GetEdge("file:StaffApp:src/api.ts", "sym:Api:Api/InventoryController.cs#InventoryController.Items", "calls_api"));
+    }
+
+    private static BuildResult MatchOne(string called, string route)
+    {
+        var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };
+        ctl.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = route });
+        var ts = new FileFacts { Lang = "typescript" };
+        var call = new Ref { Kind = "endpoint", Name = called, Line = 3 };
+        call.X["verb"] = "GET";
+        ts.Refs.Add(call);
+        return Builder.BuildGraph(Cfg("Api", "StaffApp"),
+            [Rec("Api/InventoryController.cs", ctl, "Api", "C:/repos/Api"), Rec("src/api.ts", ts, "StaffApp", "C:/repos/StaffApp")]);
+    }
+
     [Fact]
     public void Js_imports_resolve_relative_alias_and_package_entry()
     {

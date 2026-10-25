@@ -231,32 +231,50 @@ public sealed partial class Builder
             }
     }
 
+    /// <summary>
+    /// Controller actions a called path can reach. Client and server often disagree on a base path ("/api", "/v1",
+    /// "/backend/api" on one side only), so when the full path matches nothing, leading fixed segments are dropped
+    /// from the call or from the route, fewest first. Parameters must line up, and what is left must match on at
+    /// least one fixed segment. More than three equally good matches count as none.
+    /// </summary>
     private List<string> MatchRoute(string? verb, string path)
     {
         string[] segs = path.Length > 0 ? path.Split('/') : [];
-        var best = new List<string>();
-        int bestScore = -1;
-        var variants = new List<string[]> { segs };
-        if (segs.Length > 0 && segs[0] == "api") variants.Add(segs[1..]);
-        foreach (var variant in variants)
+        static bool Fixed(IEnumerable<string> s) => s.All(x => x != "{}");
+        for (int skip = 0; skip <= 3; skip++)
         {
-            foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(variant.Length) ?? [])
+            var best = new List<string>();
+            int bestScore = -1;
+            void Compare(string[] call, string[] route, string? rverb, string sid)
             {
-                if (!string.IsNullOrEmpty(verb) && !string.IsNullOrEmpty(rverb) && verb != rverb) continue;
+                if (!string.IsNullOrEmpty(verb) && !string.IsNullOrEmpty(rverb) && verb != rverb) return;
                 int score = 0;
-                bool matched = true;
-                for (int i = 0; i < variant.Length; i++)
+                for (int i = 0; i < call.Length; i++)
                 {
-                    if (variant[i] == rsegs[i]) score += 2;
-                    else if (variant[i] != "{}" && rsegs[i] != "{}") { matched = false; break; }
+                    if (call[i] == route[i]) score += 2;
+                    else if (call[i] != "{}" && route[i] != "{}") return;
                 }
-                if (!matched) continue;
+                if (skip > 0 && score == 0) return; // after dropping a base path, a fixed segment must still match
                 if (score > bestScore) { best = [sid]; bestScore = score; }
                 else if (score == bestScore) best.Add(sid);
             }
-            if (best.Count > 0) break;
+            if (skip == 0)
+                foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(segs.Length) ?? [])
+                    Compare(segs, rsegs, rverb, sid);
+            else
+            {
+                // the call has an extra base path
+                if (skip < segs.Length && Fixed(segs[..skip]) && segs[skip..].Any(s => s != "{}"))
+                    foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(segs.Length - skip) ?? [])
+                        Compare(segs[skip..], rsegs, rverb, sid);
+                // the route has one
+                if (segs.Any(s => s != "{}"))
+                    foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(segs.Length + skip) ?? [])
+                        if (Fixed(rsegs[..skip])) Compare(segs, rsegs[skip..], rverb, sid);
+            }
+            if (best.Count > 0) return best.Count <= 3 ? best : [];
         }
-        return best.Count <= 3 ? best : [];
+        return [];
     }
 
     /// <summary>MVC convention: Views/&lt;Controller&gt;/&lt;Action&gt;.cshtml is rendered by &lt;Controller&gt;Controller.&lt;Action&gt;.</summary>
