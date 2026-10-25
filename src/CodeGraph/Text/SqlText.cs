@@ -129,7 +129,7 @@ public static partial class Routes
     [GeneratedRegex(@"^https?://[^/]+")] private static partial Regex Host();
     [GeneratedRegex(@"\$\{[^}]*\}")] private static partial Regex TemplateExpr();
     [GeneratedRegex(@"\{[^}]*\}")] private static partial Regex RouteParam();
-    [GeneratedRegex(@"(?<=/):\w+")] private static partial Regex ColonParam();
+    [GeneratedRegex(@"(?<=^|/):\w+")] private static partial Regex ColonParam();
     [GeneratedRegex(@"/+")] private static partial Regex Slashes();
 
     /// <summary>'~/api/Orders/{id:int}/?x=1' -> 'api/orders/{}' ; '`/m/${n}/h`' -> 'm/{}/h'.</summary>

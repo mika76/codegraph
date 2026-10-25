@@ -121,6 +121,7 @@ public class SqlTextTests
     [InlineData("`/m/${n}/h`", "m/{}/h")]
     [InlineData("https://host:5000/inventory/items", "inventory/items")]
     [InlineData("/users/:id", "users/{}")]
+    [InlineData(":view/:id", "{}/{}")]
     public void Route_normalisation(string input, string expected) => Assert.Equal(expected, Routes.Normalize(input));
 }
 

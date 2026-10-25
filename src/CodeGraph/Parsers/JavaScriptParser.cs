@@ -588,7 +588,9 @@ public static partial class JavaScriptParser
                 var mm = AnyVerb().Match(ahead);
                 verb = mm.Success ? mm.Groups[1].Value.ToLowerInvariant() : verb;
             }
-            var r = Add(pos, "endpoint", Routes.Normalize(raw));
+            string route = Routes.Normalize(raw);
+            if (route.Split('/').All(seg => seg == "{}")) continue; // ':view/:id' - only parameters, matches anything
+            var r = Add(pos, "endpoint", route);
             if (r != null)
             {
                 if (verb != null) r.X["verb"] = verb;

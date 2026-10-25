@@ -153,6 +153,7 @@ public class JavaScriptParserTests
               router.push('/orders/new')
               navigateTo('/reports')
               format('12/31')
+              page(':view/:id')
             }
             """;
         var eps = JavaScriptParser.Parse("svc.ts", src).Refs.Where(r => r.Kind == "endpoint").ToList();
