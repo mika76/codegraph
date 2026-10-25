@@ -724,7 +724,10 @@ public sealed partial class Builder
             case "endpoint":
             {
                 string? verb = XStr(rf.Extra, "verb");
-                var hits = MatchRoute(verb, name);
+                // Url.Action(action, controller) names the action itself; routes are the fallback
+                var hits = rf.Extra?["conventional"] is not null && _actions.GetValueOrDefault(name) is { Count: > 0 and <= 3 } byName
+                    ? byName.Distinct().ToList()
+                    : MatchRoute(verb, name);
                 if (hits.Count == 0)
                 {
                     // a URL passed to an unknown function is only a guess: not an "unmatched API call"

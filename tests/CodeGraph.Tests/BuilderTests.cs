@@ -288,6 +288,26 @@ public class BuilderTests
         Assert.Equal(1, res.Stats["refs_total"]);
     }
 
+    [Fact]
+    public void Url_action_links_to_the_named_controller_action_whatever_its_route()
+    {
+        var sched = new FileFacts { Lang = "csharp", Symbols = [Sym("SchedulerController", "class"), Sym("SelectReport", "method", "SchedulerController")] };
+        sched.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "scheduling/site/{}/selectreport" });
+        var settings = new FileFacts { Lang = "csharp", Symbols = [Sym("SettingsController", "class"), Sym("Edit", "method", "SettingsController")] };
+        settings.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "settings/sites/{}/edit" });
+        var view = new FileFacts { Lang = "razor", Symbols = [Sym("add", "view")] };
+        foreach (var path in new[] { "scheduler/selectreport", "scheduler/edit" })
+        {
+            var r = new Ref { Kind = "endpoint", Name = path, FromParent = "add", Line = 1 };
+            r.X["conventional"] = true;
+            view.Refs.Add(r);
+        }
+        var g = Build(Cfg("Web"), Rec("Controllers/SchedulerController.cs", sched, "Web", "C:/repos/Web"),
+            Rec("Controllers/SettingsController.cs", settings, "Web", "C:/repos/Web"), Rec("Views/Scheduler/add.cshtml", view, "Web", "C:/repos/Web"));
+        Assert.True(HasEdge(g, "sym:Web:Views/Scheduler/add.cshtml#add", "sym:Web:Controllers/SchedulerController.cs#SchedulerController.SelectReport", "calls_api"));
+        Assert.False(HasEdge(g, "sym:Web:Views/Scheduler/add.cshtml#add", "sym:Web:Controllers/SettingsController.cs#SettingsController.Edit", "calls_api"));
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

@@ -13,6 +13,8 @@ public sealed partial class Builder
     /// <summary>Segment count -> routes (verb, segments, symbol id).</summary>
     private readonly Dictionary<int, List<(string? Verb, string[] Segs, string Sid)>> _routes = [];
     private readonly Dictionary<string, HashSet<string>> _prefixOwners = [];
+    /// <summary>"controller/action" (lower case, without the Controller suffix) -> action symbols.</summary>
+    private readonly Dictionary<string, List<string>> _actions = [];
     private HashSet<string> _basePaths = [];
 
     /// <summary>Resolve import specifiers to files; remember local names for call resolution.</summary>
@@ -219,6 +221,14 @@ public sealed partial class Builder
         foreach (var r in _records)
             foreach (var sym in r.Facts.Symbols)
             {
+                // MVC: Url.Action("Edit", "Orders") names OrdersController.Edit, whatever its route
+                if (sym.Kind == "method" && sym.Parent is { } owner && owner.EndsWith("Controller", StringComparison.Ordinal)
+                    && owner.Length > "Controller".Length)
+                {
+                    string action = $"sym:{r.Repo}:{r.Rel}#{owner}.{sym.Name}";
+                    if (_g.HasNode(action))
+                        GetOrAdd(_actions, $"{owner[..^"Controller".Length]}/{sym.Name}".ToLowerInvariant()).Add(action);
+                }
                 if (sym.Extra?["routes"] is not JsonArray { Count: > 0 } routes) continue;
                 string qual = !string.IsNullOrEmpty(sym.Parent) ? $"{sym.Parent}.{sym.Name}" : sym.Name;
                 string sid = $"sym:{r.Repo}:{r.Rel}#{qual}";
