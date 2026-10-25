@@ -23,6 +23,8 @@ public static partial class CSharpParser
     [GeneratedRegex(@"\bnew\s+([A-Za-z_][\w.]*)", O)] private static partial Regex NewRe();
     [GeneratedRegex(@"(?<![\w])(?:([A-Za-z_]\w*)\s*\??\.\s*)?([A-Za-z_]\w*)\s*(?:<[^<>();{}=]*>)?\s*\(", O)] private static partial Regex CallRe();
     [GeneratedRegex(@"(?<![\w.])([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)", O)] private static partial Regex MemberRe();
+    [GeneratedRegex(@"\b[A-Za-z_]\w*\s*<([^<>();{}=]+)>\s*\(", O)] private static partial Regex GenericCallRe();
+    [GeneratedRegex(@"^[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*$", O)] private static partial Regex TypeNameRe();
     // typeof(T), x is T, x as T, and a cast (T)x - a parenthesised name followed by an operand and not preceded by a
     // name or keyword (that would be a call or if (x) ...)
     [GeneratedRegex(@"\b(?:typeof\s*\(|is\s+|as\s+)([A-Za-z_][\w.]*)|(?<![\w)\]]\s*)\(\s*([A-Za-z_][\w.]*)\s*\)\s*(?=[A-Za-z_@(])", O)] private static partial Regex TypeofRe();
@@ -424,6 +426,14 @@ public static partial class CSharpParser
 
             foreach (Match nm in NewRe().Matches(seg))
                 Add(new Ref { Kind = "new", Name = StripGeneric(nm.Groups[1].Value), Line = li.Line(a + nm.Index) });
+            // type arguments of a generic call: services.AddScoped<IOrders, Orders>(), Query<Order>(...)
+            foreach (Match gm in GenericCallRe().Matches(seg))
+                foreach (var arg in gm.Groups[1].Value.Split(','))
+                {
+                    string t = arg.Trim().TrimEnd('?').Replace("[]", "");
+                    if (TypeNameRe().IsMatch(t) && !IsKeyword(t))
+                        Add(new Ref { Kind = "type", Name = StripGeneric(t), Line = li.Line(a + gm.Index) });
+                }
             foreach (Match cm in CallRe().Matches(seg))
             {
                 string? qual = cm.Groups[1].Success ? cm.Groups[1].Value : null;

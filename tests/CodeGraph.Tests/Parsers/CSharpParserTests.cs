@@ -137,6 +137,29 @@ public class CSharpParserTests
         Assert.Equal(8, f.Loc);
     }
 
+    [Fact]
+    public void Generic_call_arguments_are_type_uses()
+    {
+        var f = CSharpParser.Parse("Startup.cs", """
+            class Startup
+            {
+                void Register(IServiceCollection services, int a, int b, int c)
+                {
+                    services.AddScoped<IOrderRepo, OrderRepo>();
+                    var list = conn.Query<OrderRow>(sql);
+                    if (a < b && c > (a)) { }
+                    var n = Get<int>();
+                }
+            }
+            """);
+        var types = f.Refs.Where(r => r is { Kind: "type", From: "Register" }).Select(r => r.Name).ToList();
+        Assert.Contains("IOrderRepo", types);
+        Assert.Contains("OrderRepo", types);
+        Assert.Contains("OrderRow", types);
+        Assert.DoesNotContain("int", types);
+        Assert.DoesNotContain(types, t => t.Contains("&&") || t == "b" || t == "c");
+    }
+
     [Theory]
     [InlineData("Order", "orders")]   // the usual style
     [InlineData("order", "Orders")]   // lower-case type, capitalised field
