@@ -127,6 +127,47 @@ public class JavaScriptParserTests
     }
 
     [Fact]
+    public void Composables_and_stores_own_their_functions()
+    {
+        var svc = JavaScriptParser.Parse("svc.ts", """
+            export function useOrderService() {
+              const loadOrders = async () => { return api.get('/orders') }
+              function remove(id: number) { return api.delete(`/orders/${id}`) }
+              return { loadOrders, remove }
+            }
+            """);
+        Assert.Equal("useOrderService", svc.Symbols.Single(s => s.Name == "loadOrders").Parent);
+        Assert.Equal("useOrderService", svc.Symbols.Single(s => s.Name == "remove").Parent);
+        Assert.Contains(svc.Refs, r => r is { Kind: "endpoint", From: "loadOrders", FromParent: "useOrderService" });
+
+        var store = JavaScriptParser.Parse("store.ts", """
+            import { defineStore } from 'pinia'
+            import { useOrderService } from './svc'
+            const svc = useOrderService()
+            export const useShopStore = defineStore('shop', {
+              state: () => ({ orders: [] }),
+              actions: {
+                async refresh() { this.orders = await svc.loadOrders() },
+                drop(id) { const { remove } = useOrderService(); remove(id) },
+              },
+            })
+            """);
+        Assert.Contains(store.Symbols, s => s.Name == "useShopStore" && s.Parent == null);
+        Assert.Equal("useShopStore", store.Symbols.Single(s => s.Name == "refresh").Parent);
+        Assert.Equal("useShopStore", store.Symbols.Single(s => s.Name == "state").Parent); // not a top-level function
+        Assert.Contains(store.Refs, r => r is { Kind: "member", Qual: "useOrderService", Name: "loadOrders", From: "refresh" });
+        Assert.Contains(store.Refs, r => r is { Kind: "member", Qual: "useOrderService", Name: "remove", From: "drop" });
+
+        var view = JavaScriptParser.Parse("Orders.vue", """
+            <script setup lang="ts">
+            import { useShopStore } from './store'
+            const reload = () => useShopStore().refresh()
+            </script>
+            """);
+        Assert.Contains(view.Refs, r => r is { Kind: "member", Qual: "useShopStore", Name: "refresh" });
+    }
+
+    [Fact]
     public void TypeScript_types_of_any_casing()
     {
         const string src = """

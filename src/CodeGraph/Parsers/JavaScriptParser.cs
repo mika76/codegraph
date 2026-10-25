@@ -56,6 +56,32 @@ public static partial class JavaScriptParser
     [GeneratedRegex($$"""(?<![\w$.])({{Id}})\s*:\s*(?:async\s+)?(?:function\b|\([^)]*\)\s*=>|{{Id}}\s*=>)""", O)]
     private static partial Regex PropFuncRe();
 
+    /// <summary>`const useOrders = defineStore(` - a top-level constant initialised by a call.</summary>
+    [GeneratedRegex($$"""(?<![\w$.])(?:export\s+)?(?:const|let|var)\s+({{Id}})\s*(?::[^=]+?)?=\s*{{Id}}(?:\.{{Id}})*\s*(?:<[^<>()]*>)?\s*\(""", O)]
+    private static partial Regex FactoryRe();
+
+    [GeneratedRegex(@"\bfunction\b", O)]
+    private static partial Regex FunctionWord();
+
+    /// <summary>A shorthand method in an object literal - `{ async load(id) {` or `, save() {` - anywhere on a line.</summary>
+    [GeneratedRegex($$"""(?<=[{,]\s*)(?:async\s+)?\*?({{Id}})\s*(?:<[^(]*?>)?\s*\([^()]*\)\s*(?::\s*[^{;=]+?)?\{""", O)]
+    private static partial Regex ShorthandRe();
+
+    [GeneratedRegex($"^{Id}$", O)]
+    private static partial Regex IdRe();
+
+    /// <summary>`const svc = useOrders()` / `= await makeClient(` - a variable holding what a function returned.</summary>
+    [GeneratedRegex($$"""(?<![\w$.])(?:const|let|var)\s+({{Id}})\s*(?::[^=]+?)?=\s*(?:await\s+)?({{Id}})\s*(?:<[^<>()]*>)?\s*\(""", O)]
+    private static partial Regex ResultVarRe();
+
+    /// <summary>`const { load, save: store } = useOrders()` - members taken out of what a function returned.</summary>
+    [GeneratedRegex($$"""(?<![\w$.])(?:const|let|var)\s*\{([^{}]*)\}\s*=\s*(?:await\s+)?({{Id}})\s*(?:<[^<>()]*>)?\s*\(""", O)]
+    private static partial Regex DestructureRe();
+
+    /// <summary>`useOrders().load(` - a member of what a call returned, used straight away.</summary>
+    [GeneratedRegex($$"""(?<![\w$.])({{Id}})\s*\(\s*\)\s*\.\s*({{Id}})\s*\(""", O)]
+    private static partial Regex ChainedCallRe();
+
     [GeneratedRegex($$"""^[ \t]*(?:@\w+(?:\([^)]*\))?\s*)*(?:(?:public|private|protected|static|async|readonly|override|abstract|get|set)\s+)*\*?({{Id}})\s*(?:<[^(]*?>)?\s*\([^)]*\)\s*(?::\s*[^{;]+?)?\{""", O | RegexOptions.Multiline)]
     private static partial Regex MethodRe();
 
@@ -484,14 +510,43 @@ public static partial class JavaScriptParser
             if (InClass(m.Index) || NotFuncs.Contains(m.Groups[1].Value)) continue;
             spans.Add(new Span(m.Groups[1].Value, component, m.Groups[1].Index, ExprEnd(code, m.Index + m.Length), hasComponent ? "method" : "function"));
         }
-        if (hasComponent) // Vue options API shorthand methods:  save() { ... }  inside methods/computed/watch
+        // factories: a top-level `const useOrders = defineStore('orders', { actions: { load() {} } })` (or any call
+        // whose arguments define functions) - its functions become its members
+        foreach (Match m in FactoryRe().Matches(code))
         {
+            if (depths[m.Index] != 0 || InClass(m.Index) || spans.Any(s => s.Start == m.Groups[1].Index)) continue;
+            int pOpen = m.Index + m.Length - 1;
+            int pClose = Scrub.MatchBrace(code, pOpen, '(', ')');
+            string args = Sub(code, pOpen, pClose);
+            if (args.Contains("=>", StringComparison.Ordinal) || FunctionWord().IsMatch(args) || ShorthandRe().IsMatch(args))
+                spans.Add(new Span(m.Groups[1].Value, null, m.Groups[1].Index, pClose, "function"));
+        }
+        // shorthand methods  save() { ... }  - Vue options API (methods/computed/watch), and object literals inside
+        // functions anywhere (a store's actions, a composable's returned object)
+        if (hasComponent)
             foreach (Match m in MethodRe().Matches(code))
             {
                 if (InClass(m.Index) || NotFuncs.Contains(m.Groups[1].Value) || depths[m.Groups[1].Index] < 2) continue;
                 spans.Add(new Span(m.Groups[1].Value, component, m.Groups[1].Index,
                     Scrub.MatchBrace(code, code.IndexOf('{', m.Index + m.Length - 1)), "method"));
             }
+        else
+            foreach (Match m in ShorthandRe().Matches(code))
+            {
+                int at = m.Groups[1].Index;
+                if (InClass(m.Index) || NotFuncs.Contains(m.Groups[1].Value) || !spans.Any(s => s.Start < at && at < s.End)) continue;
+                spans.Add(new Span(m.Groups[1].Value, null, at, Scrub.MatchBrace(code, code.IndexOf('{', m.Index + m.Length - 1)), "function"));
+            }
+        // a function defined inside a top-level function belongs to it: useOrders.load, not a top-level load
+        var topLevel = spans.Where(s => s.Parent is null).ToList();
+        for (int i = 0; i < spans.Count; i++)
+        {
+            if (spans[i].Parent is not null) continue;
+            Span? outer = null;
+            foreach (var o in topLevel)
+                if (o.Start < spans[i].Start && spans[i].End <= o.End && (outer is null || o.Start > outer.Value.Start))
+                    outer = o;
+            if (outer is { } enclosing) spans[i] = spans[i] with { Parent = enclosing.Name };
         }
 
         var seen = new HashSet<(string?, string)>();
@@ -532,6 +587,22 @@ public static partial class JavaScriptParser
             return r;
         }
 
+        // what a function returned: `const svc = useOrders(); svc.load()` and `const { load } = useOrders(); load()`
+        // are calls to useOrders' member load (a composable, a store, a client factory)
+        var resultOf = new Dictionary<string, string>();
+        foreach (Match m in ResultVarRe().Matches(code))
+            if (!NotFuncs.Contains(m.Groups[2].Value)) resultOf.TryAdd(m.Groups[1].Value, m.Groups[2].Value);
+        var takenFrom = new Dictionary<string, (string Factory, string Member)>();
+        foreach (Match m in DestructureRe().Matches(code))
+            foreach (var part in m.Groups[1].Value.Split(','))
+            {
+                var kv = part.Split(':', 2);
+                string member = kv[0].Trim(), as_ = kv.Length > 1 ? kv[1].Trim() : member;
+                if (IdRe().IsMatch(member) && IdRe().IsMatch(as_)) takenFrom.TryAdd(as_, (m.Groups[2].Value, member));
+            }
+        foreach (Match m in ChainedCallRe().Matches(code))
+            if (!NotFuncs.Contains(m.Groups[1].Value)) Add(m.Groups[2].Index, "member", m.Groups[2].Value, m.Groups[1].Value);
+
         foreach (Match cm in CallRe().Matches(code))
         {
             string? q = cm.Groups[1].Success ? cm.Groups[1].Value : null;
@@ -539,7 +610,8 @@ public static partial class JavaScriptParser
             if (NotFuncs.Contains(n) || (q == null && Sub(code, cm.Index - 9, cm.Index).TrimEnd().EndsWith("function", StringComparison.Ordinal)))
                 continue;
             if (q is "this" or "self" or "vm") Add(cm.Index, "call", n);
-            else if (q != null) Add(cm.Index, "member", n, q);
+            else if (q != null) Add(cm.Index, "member", n, resultOf.GetValueOrDefault(q, q));
+            else if (takenFrom.TryGetValue(n, out var t)) Add(cm.Index, "member", t.Member, t.Factory);
             else Add(cm.Index, "call", n);
         }
         foreach (Match nm in NewRe().Matches(code)) Add(nm.Index, "new", nm.Groups[1].Value);

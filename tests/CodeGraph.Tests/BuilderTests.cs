@@ -353,6 +353,43 @@ public class BuilderTests
         Assert.DoesNotContain(g.Edges, e => e.Relation == "calls_api");
     }
 
+    [Fact]
+    public void Screen_to_api_through_a_store_and_a_composable()
+    {
+        var svc = CodeGraph.Parsers.JavaScriptParser.Parse("src/svc.ts", """
+            export function useOrderService() {
+              const loadOrders = async () => api.get('/orders/open')
+              return { loadOrders }
+            }
+            """);
+        var store = CodeGraph.Parsers.JavaScriptParser.Parse("src/store.ts", """
+            import { defineStore } from 'pinia'
+            import { useOrderService } from './svc'
+            export const useShopStore = defineStore('shop', {
+              actions: { async refresh() { const svc = useOrderService(); return svc.loadOrders() } },
+            })
+            """);
+        var view = CodeGraph.Parsers.JavaScriptParser.Parse("src/Orders.vue", """
+            <script setup lang="ts">
+            import { useShopStore } from './store'
+            const store = useShopStore()
+            function reload() { store.refresh() }
+            </script>
+            """);
+        var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("OrdersController", "class"), Sym("Open", "method", "OrdersController")] };
+        ctl.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "orders/open" });
+        var g = Build(Cfg("Web", "Api"), Rec("src/svc.ts", svc, "Web", "C:/repos/Web"), Rec("src/store.ts", store, "Web", "C:/repos/Web"),
+            Rec("src/Orders.vue", view, "Web", "C:/repos/Web"), Rec("OrdersController.cs", ctl, "Api", "C:/repos/Api"));
+        const string Load = "sym:Web:src/svc.ts#useOrderService.loadOrders", Refresh = "sym:Web:src/store.ts#useShopStore.refresh";
+        Assert.True(HasEdge(g, Load, "sym:Api:OrdersController.cs#OrdersController.Open", "calls_api"));
+        Assert.True(HasEdge(g, Refresh, Load, "calls"));
+        Assert.Contains(g.Edges, e => e.Target == Refresh && e.Relation == "calls" && e.Source.StartsWith("sym:Web:src/Orders.vue#", StringComparison.Ordinal));
+        // impact on the API action now reaches the screen
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "OrdersController.Open", w, depth: 4);
+        Assert.Contains("src/Orders.vue", w.ToString());
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

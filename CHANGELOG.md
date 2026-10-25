@@ -62,6 +62,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   declared.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
+- 🧭 JS/TS composables and stores: functions defined inside a function (`useOrders() { const load = ... }`) or in a
+  store (`defineStore('shop', { actions: { refresh() {} } })`, also setup-style) are its members
+  (`useOrders.load`), and `const svc = useOrders(); svc.load()`, `const { load } = useOrders()` and
+  `useShop().refresh()` link to them. "Which screens call this API?" now reaches the views through stores and
+  services. Shorthand methods in any object literal inside a function are found.
 - 🌐 Front-end API calls no longer depend on how functions are named. Calls through well-known HTTP APIs (`fetch`,
   axios/jQuery verbs, `$.ajax`, `url:` options) count as before. A URL passed to any other function - your own
   wrapper such as `orders.create('/orders')` - links when it matches a server route, and is not listed as an

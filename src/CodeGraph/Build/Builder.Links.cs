@@ -265,7 +265,7 @@ public sealed partial class Builder
             int bestScore = -1;
             void Compare(string[] call, string[] route, string? rverb, string sid)
             {
-                if (!string.IsNullOrEmpty(verb) && !string.IsNullOrEmpty(rverb) && verb != rverb) return;
+                if (!string.IsNullOrEmpty(verb) && !string.IsNullOrEmpty(rverb) && !string.Equals(verb, rverb, StringComparison.OrdinalIgnoreCase)) return;
                 int score = 0;
                 for (int i = 0; i < call.Length; i++)
                 {
