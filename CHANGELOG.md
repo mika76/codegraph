@@ -73,6 +73,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   declared.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
+- 🧬 A method that implements an interface method links to it (`implements`), an override to the base method
+  (`overrides`): `impact` on an interface method lists the implementations that must change with it.
 - 📁 `impact` folds whole files that depend on something (scripts, old patches - no routine names) at the highest
   folder holding 6 or more of them - one line with a count and a few names ("SQL/ (98 files in 22 folders)"); code
   files keep their routine names. MCP says when it capped `depth`, `limit` or another number; "1 thing" instead of

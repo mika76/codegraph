@@ -425,6 +425,33 @@ public class BuilderTests
         Assert.False(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:Billing/Billing.vbp", "depends_on")); // a VB6 exe
     }
 
+    [Fact]
+    public void Implementations_and_overrides_are_linked_and_followed_by_impact()
+    {
+        var code = CodeGraph.Parsers.CSharpParser.Parse("Repo.cs", """
+            public interface IOrderRepo { Order Get(int id); void Save(Order o); }
+            public class OrderRepo : IOrderRepo
+            {
+                public OrderRepo() { }
+                public Order Get(int id) => null;
+                public void Save(Order o) { }
+                public void Helper() { }
+            }
+            public abstract class Job { public abstract void Run(); }
+            public class NightlyJob : Job { public override void Run() { } }
+            """);
+        var g = Build(Cfg("Shop"), Rec("Svc/Repo.cs", code));
+        const string F = "sym:Shop:Svc/Repo.cs#";
+        Assert.True(HasEdge(g, F + "OrderRepo.Get", F + "IOrderRepo.Get", "implements"));
+        Assert.True(HasEdge(g, F + "OrderRepo.Save", F + "IOrderRepo.Save", "implements"));
+        Assert.True(HasEdge(g, F + "NightlyJob.Run", F + "Job.Run", "overrides"));
+        Assert.DoesNotContain(g.Edges, e => e.Source == F + "OrderRepo.Helper" && e.Relation == "implements");
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "IOrderRepo.Get", w, depth: 1);
+        Assert.Contains("Get", w.ToString().Split('\n').Last(l => l.Contains("Repo.cs")));
+        Assert.Contains("1 thing", w.ToString());
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

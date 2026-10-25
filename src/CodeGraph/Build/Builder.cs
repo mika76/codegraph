@@ -143,6 +143,7 @@ public sealed partial class Builder
         Reachability();
         Items();
         ResolveRefs();
+        MemberOverrides();
         ItemReferences();
         Rollups();
         var stats = new JsonObject();
@@ -665,6 +666,35 @@ public sealed partial class Builder
                 .Where(m => _symFile.GetValueOrDefault(m) == _symFile.GetValueOrDefault(impl)));
         }
         return output.Take(limit).ToList();
+    }
+
+    /// <summary>
+    /// A member of a type links to the member of the same name in its interface (`implements`) or base class
+    /// (`overrides`): changing the interface method changes every implementation. Base types are resolved like any
+    /// reference (visible, unambiguous); members are matched by name within the base type's file.
+    /// </summary>
+    private void MemberOverrides()
+    {
+        foreach (var ((fam, tname), bases) in _bases)
+            foreach (var typeSid in _typeIndex.GetValueOrDefault((fam, tname)) ?? [])
+            {
+                string typeFile = _symFile.GetValueOrDefault(typeSid) ?? "";
+                var own = (_members.GetValueOrDefault((fam, tname)) ?? [])
+                    .SelectMany(kv => kv.Value.Where(m => _symFile.GetValueOrDefault(m) == typeFile).Select(m => (Name: kv.Key, Sid: m)))
+                    .Where(m => N(m.Sid).Kind != "constructor").ToList();
+                foreach (var b in bases)
+                    foreach (var baseSid in Pick(typeFile, _typeIndex.GetValueOrDefault((fam, b)) ?? []))
+                    {
+                        if (baseSid == typeSid) continue;
+                        string rel = N(baseSid).Kind == "interface" ? "implements" : "overrides";
+                        string baseFile = _symFile.GetValueOrDefault(baseSid) ?? "";
+                        var baseMembers = _members.GetValueOrDefault((fam, LastPart(N(baseSid).Name).ToLowerInvariant())) ?? [];
+                        foreach (var (name, sid) in own)
+                            foreach (var bm in baseMembers.GetValueOrDefault(name) ?? [])
+                                if (_symFile.GetValueOrDefault(bm) == baseFile && N(bm).Kind != "constructor")
+                                    _g.AddEdge(sid, bm, rel);
+                    }
+            }
     }
 
     // ================================================================== references
