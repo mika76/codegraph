@@ -38,14 +38,26 @@ public static partial class DbAccess
     [GeneratedRegex("""(?:\b(?:Fields|Item|GetOrdinal|IsDBNull|Field\s*<[^<>()]*>)\s*\(\s*|\[\s*)["']([^"'\r\n]+)["']\s*[\])]""", RegexOptions.IgnoreCase)]
     private static partial Regex ColumnAccess();
 
+    /// <summary>A variable of a row / reader / recordset type: "DataRow row", "IDataReader rd", "rs As ADODB.Recordset".</summary>
+    [GeneratedRegex(@"\b(?:DataRow|DataRowView|IDataRecord|IDataReader|\w*DataReader|Recordset)\s+([A-Za-z_]\w*)\b|\b([A-Za-z_]\w*)\s+As\s+(?:New\s+)?(?:\w+\.)?(?:Recordset|DataRow|DataRowView|IDataReader|\w*DataReader)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex RowVariable();
+
+    /// <summary>A call with a variable and then a string: Get(row, "x") - the string is a column when the variable is a row.</summary>
+    [GeneratedRegex("""\(\s*([A-Za-z_]\w*)\s*,\s*["']([^"'\r\n]+)["']\s*[,)]""")]
+    private static partial Regex VariableThenString();
+
     public static void Mark(string fileName, string text, FileFacts facts)
     {
         var literals = facts.Refs.Where(r => r.Kind == "literal").ToList();
         if (literals.Count == 0) return;
-        // a column name is no procedure call, whatever its prefix
+        // a column name is no procedure call, whatever its prefix: read through a column accessor, or passed along
+        // with a row / reader (your own GetValue(row, "x") helper)
         var textLines = new LineIndex(text);
-        var columns = ColumnAccess().Matches(text)
-            .Select(m => (Line: textLines.Line(m.Index), Key: SqlText.LiteralIdentifier(m.Groups[1].Value)))
+        var rows = RowVariable().Matches(text)
+            .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var columns = ColumnAccess().Matches(text).Select(m => (m.Index, Value: m.Groups[1].Value))
+            .Concat(VariableThenString().Matches(text).Where(m => rows.Contains(m.Groups[1].Value)).Select(m => (m.Index, Value: m.Groups[2].Value)))
+            .Select(c => (Line: textLines.Line(c.Index), Key: SqlText.LiteralIdentifier(c.Value)))
             .Where(c => c.Key is not null).ToHashSet();
         foreach (var r in literals)
             if (columns.Contains((r.Line, r.Name))) r.X["column"] = true;

@@ -243,6 +243,7 @@ public class BuilderTests
         consts.Refs.Add(col);
         consts.Refs.Add(new Ref { Kind = "literal", Name = "bill_points", From = null });
         consts.Refs.Add(new Ref { Kind = "literal", Name = "bill_purge", From = null });
+        consts.Refs.Add(new Ref { Kind = "literal", Name = "bill_custom_", From = null }); // "bill_custom_" + x
         var table = new FileFacts { Lang = "sql", Symbols = [new Symbol { Name = "Accounts", Kind = "db_table", Line = 1 }] };
         table.Symbols[0].X["key"] = "accounts";
         table.Symbols[0].X["columns"] = new JsonArray("Id int", "[BILL_Points] int");
@@ -250,6 +251,7 @@ public class BuilderTests
         Assert.False(r.Unresolved.ContainsKey("exec:bill_"));
         Assert.False(r.Unresolved.ContainsKey("exec:bill_count"));
         Assert.False(r.Unresolved.ContainsKey("exec:bill_points"));
+        Assert.False(r.Unresolved.ContainsKey("exec:bill_custom_"));
         Assert.True(r.Unresolved.ContainsKey("exec:bill_purge"));   // still reported: no column of that name
     }
 

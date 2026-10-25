@@ -46,7 +46,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   next statement. The report's "called but not found" list now shows where each name was first seen.
 - 🧮 Column names are no longer reported as missing procedures because they share a procedure prefix: a string read
   through `Fields("x")`, `Item("x")`, `GetOrdinal("x")`, `Field<T>("x")` or `row["x"]` is a column, and so is a
-  name that matches a column of a known table.
+  name that matches a column of a known table, or one passed to a call together with a row, reader or recordset
+  variable (your own `GetValue(row, "x")` helper). A string ending in `_` (`"Prefix_" + x`) is not a name.
 - 💾 `build` no longer crashes when another program has `graph.json` open (e.g. a running `codegraph mcp`): the
   new graph is written next to it and swapped in, so readers never see a half-written file. If the file is
   locked for good, the build says so instead of printing a stack trace.

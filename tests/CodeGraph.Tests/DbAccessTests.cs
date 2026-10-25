@@ -145,6 +145,31 @@ public class DbAccessTests
     }
 
     [Fact]
+    public void A_string_passed_with_a_row_to_your_own_helper_is_a_column()
+    {
+        var cs = Parse("Item.cs", """
+            class Item
+            {
+                Item(DataRow r)
+                {
+                    Points = Read<decimal>(r, "bill_points");
+                    Other = Run(conn, "bill_refresh");
+                }
+                T Read<T>(DataRow r, string name) => (T)r[name];
+            }
+            """);
+        Assert.True(cs.Refs.Single(r => r.Name == "bill_points").X.ContainsKey("column"));
+        Assert.False(cs.Refs.Single(r => r.Name == "bill_refresh").X.ContainsKey("column")); // conn is no row
+        var vb = Parse("modRead.bas", """
+            Attribute VB_Name = "modRead"
+            Public Function Total(rs As ADODB.Recordset) As Double
+                Total = NullToZero(rs, "bill_total")
+            End Function
+            """);
+        Assert.True(vb.Refs.Single(r => r.Name == "bill_total").X.ContainsKey("column"));
+    }
+
+    [Fact]
     public void Comments_and_strings_do_not_count_as_database_access()
     {
         var f = Parse("Notes.cs", """

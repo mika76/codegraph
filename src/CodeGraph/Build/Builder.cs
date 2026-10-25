@@ -797,8 +797,8 @@ public sealed partial class Builder
             }
             case "literal":
             {
-                // rs.Fields("x") / row["x"] reads a column (DbAccess marks it)
-                if (rf.Extra?["column"] is not null) return false;
+                // rs.Fields("x") / row["x"] reads a column (DbAccess marks it); "Name_" + x is only the start of a name
+                if (rf.Extra?["column"] is not null || name.EndsWith('_')) return false;
                 // 'schema.name' must match exactly: "config.save" is no call to some procedure named save
                 string? tgt = name.Contains('.') ? _db.GetValueOrDefault(SqlText.ObjectKey(name)) : DbLookup(name);
                 // a bare string is a call only next to database access (DbAccess marks it) or with a configured
