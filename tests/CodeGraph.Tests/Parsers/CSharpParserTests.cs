@@ -210,6 +210,9 @@ public class CSharpParserTests
             }
             """);
         Assert.Contains(f.Refs, r => r is { Kind: "native", From: "Hash", Name: "HashEx" });
+        // a commented-out import is no call, and does not borrow the next real declaration
+        var c = CSharpParser.Parse("C.cs", "class C {\n // [DllImport(\"Old.dll\")]\n [DllImport(\"New.dll\")] static extern int Go();\n}");
+        Assert.Equal(["New.dll"], c.Refs.Where(r => r.Kind == "native").Select(r => (string)r.X["lib"]!));
         var natives = f.Refs.Where(r => r.Kind == "native").ToList();
         Assert.Contains(natives, r => r is { From: "getNextNumber", FromParent: "Native", Name: "getNextNumber" } && (string)r.X["lib"]! == "Rand.dll");
         Assert.Contains(natives, r => r is { From: "Check", Name: "CheckLic" } && (string)r.X["lib"]! == "Licence.dll");

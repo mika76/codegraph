@@ -492,6 +492,7 @@ public static partial class CSharpParser
         // [DllImport("X.dll", EntryPoint = "f")] static extern T Name(...): a native call, like a VB6 Declare
         foreach (Match dm in DllImportRe().Matches(text))
         {
+            if (code[dm.Index] != '[') continue; // inside a comment (blanked in code)
             var em = ExternMethodRe().Match(code, dm.Index + dm.Length);
             if (!em.Success || em.Index - (dm.Index + dm.Length) > 300) continue;
             string method = em.Groups[1].Value;
