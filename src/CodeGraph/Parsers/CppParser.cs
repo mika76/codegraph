@@ -14,6 +14,8 @@ public static partial class CppParser
     [GeneratedRegex(@"^\s*#\s*include\s*[<""]([^>""]+)[>""]", O | RegexOptions.Multiline)] private static partial Regex IncludeRe();
     [GeneratedRegex(@"(?<![\w])(class|struct|union)\s+(?:__declspec\([^)]*\)\s*)?([A-Za-z_]\w*)\s*(?:final\s*)?(?::\s*([^{;]+?))?\s*\{", O)] private static partial Regex TypeRe();
     [GeneratedRegex(@"(?<![\w.>])((?:[A-Za-z_]\w*\s*::\s*)*~?[A-Za-z_]\w*)\s*\(", O)] private static partial Regex FuncRe();
+    [GeneratedRegex(@"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)\(", RegexOptions.Multiline)] private static partial Regex MacroDefRe();
+    [GeneratedRegex(@"\b(?:public|private|protected)\s*:|\b(?:explicit|inline|constexpr|virtual)\b")] private static partial Regex AccessLabelRe();
     [GeneratedRegex(@"(?<![\w])(?:([A-Za-z_]\w*)\s*(?:\.|->|::)\s*)?([A-Za-z_]\w*)\s*\(", O)] private static partial Regex CallRe();
     [GeneratedRegex(@"\bnew\s+([A-Za-z_][\w:]*)", O)] private static partial Regex NewRe();
     [GeneratedRegex(@"^\s*#.*$", O | RegexOptions.Multiline)] private static partial Regex PpLine();
@@ -156,14 +158,16 @@ public static partial class CppParser
         shift[code.Length] = s;
         int Eff(int i) => i < code.Length ? depths[i] - shift[i] : 0;
 
+        // function-like macros defined here; their uses look like function definitions
+        var macros = MacroDefRe().Matches(text).Select(m => m.Groups[1].Value).ToHashSet(StringComparer.Ordinal);
         var funcs = new List<FuncInfo>();
         foreach (Match m in FuncRe().Matches(code))
         {
             string full = WsRe().Replace(m.Groups[1].Value, "");
             int sepAt = full.LastIndexOf("::", StringComparison.Ordinal);
             string name = sepAt >= 0 ? full[(sepAt + 2)..] : full;
-            if (NotFuncs.Contains(name) || (name.ToUpperInvariant() == name && name.Length > 3 && name.Contains('_')))
-                continue; // macros like MAKE_THING(
+            if (NotFuncs.Contains(name) || macros.Contains(name))
+                continue;
             int pos = m.Groups[1].Index;
             var t = TypeAt(pos);
             int expected = t != null ? t.Depth - shift[Math.Min(t.Open + 1, code.Length)] : 0;
@@ -171,8 +175,12 @@ public static partial class CppParser
             int k = pos - 1;
             while (k > 0 && ";{}".IndexOf(code[k]) < 0) k--;
             string prefix = Sub(code, k + 1, pos).Trim();
+            // nothing before the name (no return type): at file scope a macro use like TEST_F(a, b) {; in a class
+            // only a constructor or destructor looks like that
+            string typePart = AccessLabelRe().Replace(prefix, "").Trim();
             if (prefix.Contains('=') || prefix.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Contains("return")
-                || (prefix.Length == 0 && !full.Contains("::") && t == null))
+                || (prefix.Length == 0 && !full.Contains("::") && t == null)
+                || (typePart.Length == 0 && !full.Contains("::") && t != null && name != t.Name && !name.StartsWith('~')))
                 continue;
             int pOpen = code.IndexOf('(', m.Index + m.Length - 1);
             int pClose = Scrub.MatchBrace(code, pOpen, '(', ')');

@@ -72,6 +72,32 @@ public class CppParserTests
     }
 
     [Fact]
+    public void Upper_case_functions_are_functions_and_macro_uses_are_not()
+    {
+        var f = CppParser.Parse("dev.c", """
+            #define WRAP_CALL(x) do_call(x)
+            void INIT_DEVICE(void) { WRAP_CALL(1); }
+            static int OS_START(int n) { return n; }
+            static WRAP_CALL(2) { }
+            TEST_F(DeviceSuite, Starts) { INIT_DEVICE(); }
+            class Port {
+                Port() { }
+                ~Port() { }
+                DECLARE_HANDLERS() { }
+                int Read() { return 0; }
+            };
+            """);
+        var names = f.Symbols.Select(s => s.Name).ToList();
+        Assert.Contains("INIT_DEVICE", names);
+        Assert.Contains("OS_START", names);
+        Assert.Contains("Read", names);
+        Assert.Contains("Port", names);
+        Assert.DoesNotContain("WRAP_CALL", names);
+        Assert.DoesNotContain("TEST_F", names);
+        Assert.DoesNotContain("DECLARE_HANDLERS", names);
+    }
+
+    [Fact]
     public void Includes_and_sql()
     {
         var f = CppParser.Parse("rng.cpp", Src);
