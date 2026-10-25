@@ -136,6 +136,28 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Procedure_names_in_strings_must_look_like_routine_names()
+    {
+        var procs = new FileFacts { Lang = "sql" };
+        foreach (var name in new[] { "test", "Order_Get", "GetOrders", "cleanup" })
+        {
+            var s = new Symbol { Name = name, Kind = "db_proc", Line = 1 };
+            s.X["key"] = name.ToLowerInvariant();
+            procs.Symbols.Add(s);
+        }
+        var js = new FileFacts { Lang = "typescript", Symbols = [Sym("load", "function")] };
+        foreach (var lit in new[] { "test", "Order_Get", "GetOrders", "cleanup" })
+            js.Refs.Add(new Ref { Kind = "literal", Name = lit, From = "load" });
+
+        var g = Build(Cfg("Shop"), Rec("Database/procs.sql", procs), Rec("web/api.ts", js));
+        const string Caller = "sym:Shop:web/api.ts#load";
+        Assert.True(HasEdge(g, Caller, "db:order_get", "executes"));
+        Assert.True(HasEdge(g, Caller, "db:getorders", "executes"));
+        Assert.False(HasEdge(g, Caller, "db:test", "executes"));
+        Assert.False(HasEdge(g, Caller, "db:cleanup", "executes"));
+    }
+
+    [Fact]
     public void Front_end_endpoint_calls_match_controller_routes()
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

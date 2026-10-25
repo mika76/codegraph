@@ -28,6 +28,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🎯 A plain word in a string (`"test"`, `"cleanup"`) no longer links to a stored procedure that happens to have
+  that name. A bare string now needs a configured `proc_prefixes` prefix, an underscore or inner capitals
+  (`GetOrders`) to count as a procedure call.
 - 🔓 `publish.ps1` no longer fails while `codegraph mcp` is running: the locked exe is renamed to
   `codegraph.old-*.exe` (removed on a later run) and the new one is copied next to it.
 - 🔧 C++ projects take their output file from the linker settings - `/out:` in `.dsp`, the linker's `OutputFile` in
