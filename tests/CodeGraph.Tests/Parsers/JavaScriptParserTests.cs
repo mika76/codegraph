@@ -127,6 +127,21 @@ public class JavaScriptParserTests
     }
 
     [Fact]
+    public void TypeScript_types_of_any_casing()
+    {
+        const string src = """
+            type order = { id: number };
+            export function load(a: Order, b: order, c: string): Promise<order[]> {
+              return x ? a : b;
+            }
+            """;
+        var types = JavaScriptParser.Parse("t.ts", src).Refs.Where(r => r.Kind == "type").ToList();
+        Assert.False(types.Single(r => r.Name == "Order").X.ContainsKey("candidate"));
+        Assert.True(types.First(r => r.Name == "order").X.ContainsKey("candidate"));
+        Assert.DoesNotContain(types, r => r.Name is "string" or "number");
+    }
+
+    [Fact]
     public void Http_calls_through_any_wrapper_but_not_navigation()
     {
         const string src = """

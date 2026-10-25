@@ -98,6 +98,23 @@ public class CppParserTests
     }
 
     [Fact]
+    public void Scope_qualified_calls_name_the_type_whatever_its_casing()
+    {
+        var f = CppParser.Parse("x.cpp", """
+            void Run(Widget Panel, widget* w) {
+                util::helper(1);
+                Helper::Calc(2);
+                Panel.Draw();
+                w->draw();
+            }
+            """);
+        Assert.Contains(f.Refs, r => r is { Kind: "member", Qual: "util", QualType: "util", Name: "helper" });
+        Assert.Contains(f.Refs, r => r is { Kind: "member", Qual: "Helper", QualType: "Helper", Name: "Calc" });
+        Assert.Contains(f.Refs, r => r is { Kind: "member", Qual: "Panel", QualType: null, Name: "Draw" });
+        Assert.Contains(f.Refs, r => r is { Kind: "member", Qual: "w", QualType: null, Name: "draw" });
+    }
+
+    [Fact]
     public void Includes_and_sql()
     {
         var f = CppParser.Parse("rng.cpp", Src);

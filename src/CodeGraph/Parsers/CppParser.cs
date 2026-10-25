@@ -16,7 +16,7 @@ public static partial class CppParser
     [GeneratedRegex(@"(?<![\w.>])((?:[A-Za-z_]\w*\s*::\s*)*~?[A-Za-z_]\w*)\s*\(", O)] private static partial Regex FuncRe();
     [GeneratedRegex(@"^[ \t]*#[ \t]*define[ \t]+([A-Za-z_]\w*)\(", RegexOptions.Multiline)] private static partial Regex MacroDefRe();
     [GeneratedRegex(@"\b(?:public|private|protected)\s*:|\b(?:explicit|inline|constexpr|virtual)\b")] private static partial Regex AccessLabelRe();
-    [GeneratedRegex(@"(?<![\w])(?:([A-Za-z_]\w*)\s*(?:\.|->|::)\s*)?([A-Za-z_]\w*)\s*\(", O)] private static partial Regex CallRe();
+    [GeneratedRegex(@"(?<![\w])(?:([A-Za-z_]\w*)\s*(\.|->|::)\s*)?([A-Za-z_]\w*)\s*\(", O)] private static partial Regex CallRe();
     [GeneratedRegex(@"\bnew\s+([A-Za-z_][\w:]*)", O)] private static partial Regex NewRe();
     [GeneratedRegex(@"^\s*#.*$", O | RegexOptions.Multiline)] private static partial Regex PpLine();
     [GeneratedRegex(@"\bnamespace\s+\w*\s*\{", O)] private static partial Regex NamespaceOpen();
@@ -220,7 +220,7 @@ public static partial class CppParser
             foreach (Match cm in CallRe().Matches(seg))
             {
                 string? qual = cm.Groups[1].Success ? cm.Groups[1].Value : null;
-                string name = cm.Groups[2].Value;
+                string name = cm.Groups[3].Value;
                 if (NotFuncs.Contains(name)) continue;
                 var key2 = (qual != null ? "member" : "call", qual, name);
                 if (local.ContainsKey(key2)) continue;
@@ -228,7 +228,8 @@ public static partial class CppParser
                 if (qual != null)
                 {
                     r.Qual = qual;
-                    r.QualType = char.IsUpper(qual[0]) ? qual : null;
+                    // Type::method names the type, whatever its casing; obj.method / obj->method is an object
+                    r.QualType = cm.Groups[2].Value == "::" ? qual : null;
                 }
                 local[key2] = r;
                 order.Add(key2);

@@ -22,8 +22,10 @@ public static partial class CSharpParser
     [GeneratedRegex(@"\bvar\s+([A-Za-z_]\w*)\s*=\s*new\s+([A-Za-z_][\w.]*)", O)] private static partial Regex VarNewRe();
     [GeneratedRegex(@"\bnew\s+([A-Za-z_][\w.]*)", O)] private static partial Regex NewRe();
     [GeneratedRegex(@"(?<![\w])(?:([A-Za-z_]\w*)\s*\??\.\s*)?([A-Za-z_]\w*)\s*(?:<[^<>();{}=]*>)?\s*\(", O)] private static partial Regex CallRe();
-    [GeneratedRegex(@"(?<![\w.])([A-Z]\w*)\s*\.\s*([A-Za-z_]\w*)", O)] private static partial Regex MemberRe();
-    [GeneratedRegex(@"\b(?:typeof\s*\(|is\s+|as\s+|\(\s*)([A-Z][\w.]*)\s*(?:\)|\b)", O)] private static partial Regex TypeofRe();
+    [GeneratedRegex(@"(?<![\w.])([A-Za-z_]\w*)\s*\.\s*([A-Za-z_]\w*)", O)] private static partial Regex MemberRe();
+    // typeof(T), x is T, x as T, and a cast (T)x - a parenthesised name followed by an operand and not preceded by a
+    // name or keyword (that would be a call or if (x) ...)
+    [GeneratedRegex(@"\b(?:typeof\s*\(|is\s+|as\s+)([A-Za-z_][\w.]*)|(?<![\w)\]]\s*)\(\s*([A-Za-z_][\w.]*)\s*\)\s*(?=[A-Za-z_@(])", O)] private static partial Regex TypeofRe();
     [GeneratedRegex(@"([A-Za-z_][\w.]*(?:<[^,()]*?>)?(?:\[\s*\])?\??)\s+([A-Za-z_]\w*)\s*(?:=[^,]*)?(?:,|$)", O)] private static partial Regex ParamRe();
     [GeneratedRegex(@"\[\s*assembly\s*:\s*(Assembly\w*Version)\s*\(\s*""([^""]+)""", O | RegexOptions.IgnoreCase)] private static partial Regex AssemblyAttr();
     [GeneratedRegex(@"\[\s*([^\[\]]*)\]", O)] private static partial Regex AttrBracketRe();
@@ -55,7 +57,15 @@ public static partial class CSharpParser
         "int", "long", "short", "byte", "bool", "string", "object", "decimal", "double", "float", "char", "void",
         "var", "dynamic", "uint", "ulong", "ushort", "sbyte", "return", "new", "else", "throw", "await", "case",
         "in", "out", "ref", "params", "using", "goto", "yield", "const", "static", "readonly", "public", "private",
+        "nint", "nuint",
     ];
+
+    /// <summary>C#'s own keywords and built-in types - never a type or object of the codebase, whatever its casing.</summary>
+    private static bool IsKeyword(string name)
+    {
+        string l = name.ToLowerInvariant();
+        return BuiltinTypes.Contains(l) || NotMethods.Contains(l) || l is "null" or "true" or "false" or "not" or "and" or "or" or "value";
+    }
 
     private static readonly Dictionary<string, string> HttpVerbs = new()
     {
@@ -430,16 +440,22 @@ public static partial class CSharpParser
             }
             foreach (Match mm in MemberRe().Matches(seg))
             {
-                string ql = mm.Groups[1].Value.ToLowerInvariant();
-                string? qtype = Or(Local(ql), Field(ql));
-                Add(new Ref { Kind = "member", Qual = mm.Groups[1].Value, QualType = qtype, Name = mm.Groups[2].Value, Line = li.Line(a + mm.Index) });
+                string q = mm.Groups[1].Value, ql = q.ToLowerInvariant();
+                if (ql != "this" && IsKeyword(q)) continue;
+                string? qtype = ql == "this" ? parentQual : Or(Local(ql), Field(ql));
+                Add(new Ref { Kind = "member", Qual = q, QualType = qtype, Name = mm.Groups[2].Value, Line = li.Line(a + mm.Index) });
             }
             foreach (Match tm in TypeofRe().Matches(seg))
-                Add(new Ref { Kind = "type", Name = StripGeneric(tm.Groups[1].Value), Line = li.Line(a + tm.Index) });
+            {
+                string t = tm.Groups[1].Success ? tm.Groups[1].Value : tm.Groups[2].Value;
+                // (x) where x is a local or parameter is a parenthesised value, not a cast
+                if (IsKeyword(t) || (tm.Groups[2].Success && Local(t.ToLowerInvariant()) is not null)) continue;
+                Add(new Ref { Kind = "type", Name = StripGeneric(t), Line = li.Line(a + tm.Index) });
+            }
             foreach (var v in localOrder)
             {
                 string t = local[v];
-                if (t.Length > 0 && char.IsUpper(t[0]))
+                if (t.Length > 0 && !IsKeyword(t))
                     Add(new Ref { Kind = "type", Name = t, Line = li.Line(a) });
             }
             return outList;
@@ -449,7 +465,7 @@ public static partial class CSharpParser
             refs.AddRange(BodyRefs(me.Name, me.Type.Qual, me.BodyStart, me.BodyEnd, me.Params));
         foreach (var tq in fieldOrder)
             foreach (var t in fieldTypes[tq].Values.Distinct())
-                if (t.Length > 0 && char.IsUpper(t[0]))
+                if (t.Length > 0 && !IsKeyword(t))
                     refs.Add(new Ref { From = null, FromParent = tq, Kind = "type", Name = t, Line = 1 });
 
         // ---- strings: SQL text and object-name literals

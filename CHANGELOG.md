@@ -40,6 +40,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   solution, and `packages` next to a solution (a JS monorepo's `packages/` is read now). Library copies are matched
   as `jquery.js`, `jquery-*.js`, `jquery.*.js`, so `reactions.js` or `bootstrapper.js` are read, and
   `Reference.cs` is only skipped inside WCF `Service References` folders.
+- 🔠 Types and members are found whatever their casing. C#: member access through any field, local or type
+  (`orders.Total`, `order.Empty`), casts recognised by their shape `(T)x`, and only C#'s own keywords are skipped.
+  C++: `ns::fn()` names its scope whatever the case. TypeScript: lower-case type names link when such a type is
+  declared.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
 - 🌐 Front-end API calls no longer depend on how functions are named. Calls through well-known HTTP APIs (`fetch`,

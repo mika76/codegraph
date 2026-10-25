@@ -136,4 +136,38 @@ public class CSharpParserTests
         Assert.Contains(f.Refs, r => r is { Kind: "literal", Name: "bill___customer_get", Line: 5, From: "M" });
         Assert.Equal(8, f.Loc);
     }
+
+    [Theory]
+    [InlineData("Order", "orders")]   // the usual style
+    [InlineData("order", "Orders")]   // lower-case type, capitalised field
+    [InlineData("order", "_orders")]  // any naming
+    public void Types_and_members_are_found_whatever_the_casing(string type, string field)
+    {
+        string src = $$"""
+            class {{type}} { public int Total; public static {{type}} Empty; }
+            class Repo
+            {
+                {{type}} {{field}};
+                int Sum(object o, bool ready)
+                {
+                    {{type}} x = new {{type}}();
+                    var y = ({{type}})o;
+                    if (ready) Log(x);
+                    var t = typeof({{type}});
+                    var e = {{type}}.Empty;
+                    return {{field}}.Total + x.Total;
+                }
+            }
+            """;
+        var f = CSharpParser.Parse("repo.cs", src);
+        var sum = f.Refs.Where(r => r.From == "Sum").ToList();
+        Assert.Contains(sum, r => r is { Kind: "type" } && r.Name == type);
+        Assert.Contains(sum, r => r is { Kind: "member", Name: "Empty" } && r.Qual == type);
+        Assert.Contains(sum, r => r is { Kind: "member", Name: "Total" } && r.Qual == field && r.QualType == type);
+        Assert.Contains(sum, r => r is { Kind: "member", Name: "Total", Qual: "x" } && r.QualType == type);
+        Assert.Contains(f.Refs, r => r is { Kind: "type", FromParent: "Repo", From: null } && r.Name == type);
+        // keywords and parenthesised values are not types
+        Assert.DoesNotContain(f.Refs, r => r.Kind == "type" && (r.Name is "ready" or "o" or "int" or "object" or "bool" or "var"));
+        Assert.DoesNotContain(f.Refs, r => r.Kind == "member" && r.Qual is "int" or "string");
+    }
 }

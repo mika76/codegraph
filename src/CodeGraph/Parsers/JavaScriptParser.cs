@@ -68,8 +68,16 @@ public static partial class JavaScriptParser
     [GeneratedRegex($$"""\bnew\s+({{Id}})""", O)]
     private static partial Regex NewRe();
 
-    [GeneratedRegex(@"(?:\:\s*|<\s*|\bas\s+|\bimplements\s+|\bextends\s+)([A-Z][\w$]*)", O)]
+    [GeneratedRegex(@"(?:\:\s*|<\s*|\bas\s+|\bimplements\s+|\bextends\s+)([A-Za-z_$][\w$]*)", O)]
     private static partial Regex TypeUseRe();
+
+    /// <summary>TypeScript's own types and type keywords.</summary>
+    private static readonly HashSet<string> TsBuiltinTypes =
+    [
+        "string", "number", "boolean", "any", "unknown", "never", "void", "null", "undefined", "object", "symbol",
+        "bigint", "this", "const", "keyof", "typeof", "readonly", "infer", "unique", "asserts", "is", "true", "false",
+        "new", "function", "class", "await", "async", "return", "default", "case",
+    ];
 
     private static readonly HashSet<string> NotFuncs =
     [
@@ -533,7 +541,13 @@ public static partial class JavaScriptParser
         }
         foreach (Match nm in NewRe().Matches(code)) Add(nm.Index, "new", nm.Groups[1].Value);
         if (lang == "typescript")
-            foreach (Match tm in TypeUseRe().Matches(code)) Add(tm.Index, "type", tm.Groups[1].Value);
+            foreach (Match tm in TypeUseRe().Matches(code))
+            {
+                string t = tm.Groups[1].Value;
+                if (TsBuiltinTypes.Contains(t)) continue;
+                // ': x' is also an object literal or a ternary: a lower-case name only links to a declared type
+                if (Add(tm.Index, "type", t) is { } r && !char.IsUpper(t[0])) r.X["candidate"] = true;
+            }
         refs.AddRange(localOrder);
 
         // ---- HTTP calls: api.get('/inventory/items'), fetch(`${API_URL}/x/${id}`), $.ajax({url: '/C/A'})
