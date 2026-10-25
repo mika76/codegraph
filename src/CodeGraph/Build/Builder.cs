@@ -744,7 +744,8 @@ public sealed partial class Builder
                 string? tgt = DbLookup(name);
                 if (tgt is null)
                 {
-                    Inc(_unresolved, (rf.Mode == "exec" ? "exec:" : "db:") + name);
+                    // x.y( is often a method (XML .value(), a CLR type), not a missing function: not reported
+                    if (rf.Mode != "call") Inc(_unresolved, (rf.Mode == "exec" ? "exec:" : "db:") + name);
                     return false;
                 }
                 string tk = N(tgt).Kind;
@@ -762,13 +763,15 @@ public sealed partial class Builder
             }
             case "literal":
             {
-                string? tgt = DbLookup(name);
+                // 'schema.name' must match exactly: "config.save" is no call to some procedure named save
+                string? tgt = name.Contains('.') ? _db.GetValueOrDefault(SqlText.ObjectKey(name)) : DbLookup(name);
                 // a bare string is a call only next to database access (DbAccess marks it) or with a configured
                 // prefix (e.g. a constants module naming procedures); otherwise any word could match a procedure
-                bool prefixed = _procPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                string shortName = SqlText.ShortName(name);
+                bool prefixed = _procPrefixes.Any(p => shortName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
                 if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && (prefixed || rf.Extra?["db"] is not null))
                     return Edge(caller, tgt, "executes", lineAttr, ("via", "name in string"));
-                if (tgt is null && _procPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+                if (tgt is null && prefixed)
                     Inc(_unresolved, "exec:" + name);
                 return false;
             }

@@ -94,10 +94,26 @@ public class SqlTextTests
         Assert.Empty(SqlText.Refs("select * from #tmp join @t on 1=1"));
     }
 
+    [Fact]
+    public void Function_calls_under_any_schema()
+    {
+        var refs = SqlText.Refs("select dbo.TotalOf(1), sales.net_total(2), [app].[Fx](3), x.value('a', 'int') from t");
+        Assert.Contains(("call", "dbo.totalof"), refs);
+        Assert.Contains(("call", "sales.net_total"), refs);
+        Assert.Contains(("call", "app.fx"), refs);
+        Assert.DoesNotContain(refs, r => r.Name == "totalof" || r.Name.StartsWith("1"));
+    }
+
     [Theory]
     [InlineData("bill___Customer_Get", "bill___customer_get")]
+    [InlineData("getorders", "getorders")]
+    [InlineData("ORDERS_GET", "orders_get")]
     [InlineData("[dbo].[Orders]", "orders")]
+    [InlineData("sales.GetOrders", "sales.getorders")]
+    [InlineData("[app].[Order Lines]", "app.order lines")]
     [InlineData("select 1", null)]
+    [InlineData("two words", null)]
+    [InlineData("a.b.c.d", null)]
     public void LiteralIdentifier(string s, string? expected) => Assert.Equal(expected, SqlText.LiteralIdentifier(s));
 
     [Theory]

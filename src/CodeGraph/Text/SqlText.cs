@@ -19,10 +19,11 @@ public static partial class SqlText
     [GeneratedRegex(@"\bjoin\s+" + Name, Opt)] private static partial Regex Join();
     [GeneratedRegex(@"\bapply\s+" + Name, Opt)] private static partial Regex Apply();
     [GeneratedRegex(@"\bexec(?:ute)?\s+(?:@\w+\s*=\s*)?" + Name, Opt)] private static partial Regex Exec();
-    [GeneratedRegex(@"\b(?:dbo|\[dbo\])\s*\.\s*(\[[^\]]+\]|[A-Za-z_]\w*)\s*\(", Opt)] private static partial Regex FuncCall();
+    // schema.function( - any schema; names that are no DB object (x.value( on XML ...) drop out in resolution
+    [GeneratedRegex(@"(?<![\w.\]])((?:\[[^\]]+\]|[A-Za-z_]\w*)\s*\.\s*(?:\[[^\]]+\]|[A-Za-z_]\w*))\s*\(", Opt)] private static partial Regex FuncCall();
     [GeneratedRegex(@"\s*\.\s*")] private static partial Regex Dot();
     [GeneratedRegex(@"\b(select|insert|update|delete|exec|execute|merge|truncate)\b", Opt)] private static partial Regex Sqlish();
-    [GeneratedRegex(@"^\s*\[?(?:dbo\]?\.\[?)?([A-Za-z_][\w]*)\]?\s*$")] private static partial Regex IdentLiteral();
+    [GeneratedRegex(@"^\s*((?:(?:\[[A-Za-z_][^\]]*\]|[A-Za-z_]\w*)\s*\.\s*)?(?:\[[A-Za-z_][^\]]*\]|[A-Za-z_]\w*))\s*$")] private static partial Regex IdentLiteral();
 
     // UPDATE alias SET ... FROM RealTable alias -> the FROM picks RealTable up as a read; unknown names
     // (the alias) are dropped by the resolver.
@@ -111,11 +112,14 @@ public static partial class SqlText
 
     public static bool LooksLikeSql(string s) => Sqlish().IsMatch(s);
 
-    /// <summary>If a string literal is just an object name like 'bill___Customer_Get' or '[dbo].[x]', return it lower-cased.</summary>
+    /// <summary>
+    /// If a string literal is just an object name - 'GetOrders', '[dbo].[x]', 'sales.get_orders' - return its
+    /// normalised key ('getorders', 'x', 'sales.get_orders'), else null.
+    /// </summary>
     public static string? LiteralIdentifier(string s)
     {
         var m = IdentLiteral().Match(s);
-        return m.Success ? m.Groups[1].Value.ToLowerInvariant() : null;
+        return m.Success ? ObjectKey(m.Groups[1].Value) : null;
     }
 }
 

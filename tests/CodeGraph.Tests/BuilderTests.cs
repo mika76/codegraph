@@ -165,6 +165,28 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Schema_qualified_strings_must_match_exactly()
+    {
+        var procs = new FileFacts { Lang = "sql" };
+        foreach (var key in new[] { "save", "sales.get_orders" })
+        {
+            var s = new Symbol { Name = key, Kind = "db_proc", Line = 1 };
+            s.X["key"] = key;
+            procs.Symbols.Add(s);
+        }
+        var code = new FileFacts { Lang = "csharp", Symbols = [Sym("Repo", "class"), Sym("Load", "method", "Repo")] };
+        foreach (var lit in new[] { "config.save", "sales.get_orders" })
+        {
+            var r = new Ref { Kind = "literal", Name = lit, From = "Load", FromParent = "Repo" };
+            r.X["db"] = true;
+            code.Refs.Add(r);
+        }
+        var g = Build(Cfg("Shop"), Rec("Database/procs.sql", procs), Rec("Svc/Repo.cs", code));
+        Assert.True(HasEdge(g, "sym:Shop:Svc/Repo.cs#Repo.Load", "db:sales.get_orders", "executes"));
+        Assert.False(HasEdge(g, "sym:Shop:Svc/Repo.cs#Repo.Load", "db:save", "executes"));
+    }
+
+    [Fact]
     public void A_configured_prefix_links_without_database_access()
     {
         var procs = new FileFacts { Lang = "sql" };
