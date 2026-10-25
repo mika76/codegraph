@@ -43,6 +43,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🧩 C#: a method right after a `#region`, `#endregion`, `#if` or `#pragma` line was missing from the graph (its
+  calls, SQL and implementations were put on the class instead). Preprocessor lines are now ignored when reading
+  declarations.
 - 📜 In SQL scripts a procedure, view, function or trigger definition ends at its batch's `GO` (as in T-SQL), not at
   the next definition: what a patch script does after the `GO` (e.g. updating a patch-level table) is the script's
   own work and is no longer attributed to the procedure defined before it. Applies to SQL embedded in your own file

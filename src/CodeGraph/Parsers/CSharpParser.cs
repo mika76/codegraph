@@ -40,6 +40,8 @@ public static partial class CSharpParser
     [GeneratedRegex(@"^\s*(?:\[[^\]]*\]\s*)*([A-Za-z_]\w*)\s*(?:=\s*(\S[^,]*?))?\s*$", O)] private static partial Regex EnumMemberRe();
     [GeneratedRegex(@"(?:\b(public|private|protected|internal)\s+)?(?:(?:new|static|unsafe|protected|internal)\s+)*\bconst\s+[\w.<>?\[\]]+\s+([A-Za-z_]\w*)\s*=\s*([^;]+);", O)] private static partial Regex ConstRe();
     [GeneratedRegex(@"\[area\]/?", O)] private static partial Regex AreaRe();
+    [GeneratedRegex(@"^[ \t]*#[ \t]*(?:region|endregion|if|elif|else|endif|pragma|define|undef|nullable|line|warning|error)\b[^\r\n]*", O | RegexOptions.Multiline)]
+    private static partial Regex PreprocessorLine();
 
     private static readonly HashSet<string> Modifiers =
     [
@@ -129,6 +131,8 @@ public static partial class CSharpParser
     public static FileFacts Parse(string path, string text)
     {
         var (code, strings) = Scrub.CLike(text);
+        // #region / #if / #pragma lines are no code: blank them (same length) so the declaration after one is seen
+        code = PreprocessorLine().Replace(code, m => new string(' ', m.Length));
         var li = new LineIndex(code);
         int[] depths = Scrub.DepthMap(code);
         var facts = new FileFacts { Lang = "csharp" };

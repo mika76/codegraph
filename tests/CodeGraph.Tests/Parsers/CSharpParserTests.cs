@@ -138,6 +138,34 @@ public class CSharpParserTests
     }
 
     [Fact]
+    public void Methods_after_region_and_other_directives_are_found()
+    {
+        var f = CSharpParser.Parse("Client.cs", """
+            public class Client
+            {
+                #region Today Revenue
+                public async Task<decimal> GetToday() { return await Get("api/today"); }
+                #endregion
+                #region Yesterday's revenue (old API) - v2.1
+                public decimal GetYesterday() => 0;
+                #endregion
+                #endregion
+                #region Last week
+                private static int LastWeek(int n) { return n; }
+                #endregion
+            #if DEBUG
+                public void Dump() { }
+            #endif
+                #pragma warning disable CS0618
+                public void Old() { }
+            }
+            """);
+        var names = f.Symbols.Where(s => s.Parent == "Client").Select(s => s.Name).ToList();
+        Assert.Equal(["GetToday", "GetYesterday", "LastWeek", "Dump", "Old"], names);
+        Assert.Equal(4, f.Symbols.Single(s => s.Name == "GetToday").Line);
+    }
+
+    [Fact]
     public void Generic_call_arguments_are_type_uses()
     {
         var f = CSharpParser.Parse("Startup.cs", """

@@ -118,4 +118,13 @@ Public Event Changed(x As Long)
         Assert.Equal("Foo", f.Symbols.Single(s => s.Name == "Run").Parent);
         Assert.Contains(f.Refs, r => r is { Kind: "inherit", From: "Foo", Name: "Bar" });
     }
+
+    [Fact]
+    public void Vbnet_routines_after_region_are_found()
+    {
+        const string vb = "Public Class Foo\n#Region \"Today's revenue\"\n  Public Function GetToday() As Decimal\n  End Function\n#End Region\n" +
+                          "#Region \"Old\"\n  Private Sub Old()\n  End Sub\n#End Region\nEnd Class\n";
+        var f = Vb6Parser.Parse("a/Foo.vb", vb);
+        Assert.Equal(["GetToday", "Old"], f.Symbols.Where(s => s.Parent == "Foo").Select(s => s.Name));
+    }
 }
