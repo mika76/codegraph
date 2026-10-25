@@ -991,7 +991,8 @@ public sealed partial class Builder
     /// <summary>Whether a project of this format can be what a reference of this kind points at.</summary>
     private static bool CanProvide(string libKind, string? format) => libKind switch
     {
-        "assembly" or "package" => format is not null && DotNetFormats.Contains(format),
+        // a database project builds SQL CLR assemblies too
+        "assembly" or "package" => format is not null && (DotNetFormats.Contains(format) || format == "sqlproj"),
         "native" => format is not null && NativeFormats.Contains(format),
         "npm" or "npm-dev" => format == "npm",
         // COM components and controls come from VB6, C++ or .NET (COM-visible) projects

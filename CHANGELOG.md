@@ -40,7 +40,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   counted as part of a release taken from the branch name.
 - 🔗 A .NET reference is only linked to a project that can produce it: `<Reference Include="System" />` (a framework
   assembly, no HintPath) no longer makes every .NET project depend on a VB6 app that happens to be called `System`,
-  and assembly/package references only reach .NET projects, native libraries only C/C++ projects.
+  and assembly/package references only reach .NET projects (or a database project building SQL CLR assemblies),
+  native libraries only C/C++ projects.
 - 🧭 `path` no longer connects two things through a hub when it has to change direction: two screens in the same
   release, patch, installer or project are not "connected" by that. A chain also never goes down `contains` after a
   call: calling a factory or class does not mean using all of its members (`contains` counts only at the ends - a
