@@ -1,6 +1,6 @@
 namespace CodeGraph;
 
-/// <summary>Command line: codegraph build | show | impact | path | release-snapshot | init.</summary>
+/// <summary>Command line: codegraph build | show | impact | path | mcp | release-snapshot | init.</summary>
 public static class Cli
 {
     private const string Usage = """
@@ -10,6 +10,7 @@ public static class Cli
                 codegraph show <name>                    a project/file/routine/DB object and its connections
                 codegraph impact <name> [--depth N]      what depends on it (directly or indirectly)
                 codegraph path <a> <b>                   how two things are connected
+                codegraph mcp                            serve the graph to AI assistants (MCP over stdio)
                 codegraph release-snapshot <ver> [--date yyyy-mm-dd]
                                                          add a release with current project versions to releases.json
                 codegraph init                           write example codegraph.json, releases.json, knowledge.json here
@@ -62,6 +63,9 @@ public static class Cli
             case "path":
                 if (args.Count != 2) throw new CodeGraphException("Usage: codegraph path <a> <b>");
                 return Commands.Path(cfg, args[0], args[1]);
+            case "mcp":
+                ExpectNoMore(args);
+                return Commands.Mcp(cfg);
             case "release-snapshot":
                 string? date = TakeOption(args, "--date");
                 return Commands.ReleaseSnapshot(cfg, Single(args, "version"), date);

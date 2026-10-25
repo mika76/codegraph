@@ -78,6 +78,20 @@ public static class Commands
         return 0;
     }
 
+    /// <summary>Serve the graph over MCP on stdin/stdout until the client closes stdin.</summary>
+    public static int Mcp(Config cfg)
+    {
+        var utf8 = new System.Text.UTF8Encoding(false);
+        var input = new StreamReader(Console.OpenStandardInput(), utf8);
+        var output = new StreamWriter(Console.OpenStandardOutput(), utf8);
+        // stdout carries only protocol messages; anything else written to Console.Out goes to stderr
+        Console.SetOut(Console.Error);
+        Console.Error.WriteLine($"codegraph mcp {Cli.Version}: serving {GraphPath(cfg)}");
+        new Mcp.McpServer(GraphPath(cfg), System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md"))
+            .Run(input, output, Console.Error);
+        return 0;
+    }
+
     public static int ReleaseSnapshot(Config cfg, string version, string? date)
     {
         if (string.IsNullOrEmpty(cfg.Releases))
