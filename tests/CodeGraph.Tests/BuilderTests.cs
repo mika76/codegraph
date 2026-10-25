@@ -405,6 +405,26 @@ public class BuilderTests
         Assert.Contains("cmdOrder_Click", w.ToString()); // where is this form opened from
     }
 
+    [Fact]
+    public void Assembly_references_only_reach_dotnet_projects_and_never_the_framework()
+    {
+        FileFacts Net(string name, params LibRef[] libs) => new()
+        {
+            Lang = "project",
+            Project = new ProjectInfo { Format = "csproj", Lang = "csharp", Name = name, Assembly = name, Type = "dll", Output = name + ".dll", Libs = [.. libs] },
+        };
+        var api = Net("Shop.Api",
+            new LibRef { Kind = "assembly", Name = "System", File = "System.dll" },
+            new LibRef { Kind = "assembly", Name = "Shop.Data", File = "Shop.Data.dll" },
+            new LibRef { Kind = "assembly", Name = "Billing", File = "Billing.dll" });
+        var g = Build(Cfg("Shop"),
+            Rec("Api/Shop.Api.csproj", api), Rec("Data/Shop.Data.csproj", Net("Shop.Data")),
+            Rec("System/System.vbp", Project("System", "exe")), Rec("Billing/Billing.vbp", Project("Billing", "exe")));
+        Assert.True(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:Data/Shop.Data.csproj", "depends_on"));
+        Assert.False(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:System/System.vbp", "depends_on"));   // framework
+        Assert.False(HasEdge(g, "proj:Shop:Api/Shop.Api.csproj", "proj:Shop:Billing/Billing.vbp", "depends_on")); // a VB6 exe
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

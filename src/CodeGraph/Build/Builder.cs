@@ -946,6 +946,30 @@ public sealed partial class Builder
         return eid;
     }
 
+    private static readonly HashSet<string> DotNetFormats = ["csproj", "vbproj", "fsproj"];
+    private static readonly HashSet<string> NativeFormats = ["vcxproj", "vcproj", "dsp"];
+
+    /// <summary>Whether a project of this format can be what a reference of this kind points at.</summary>
+    private static bool CanProvide(string libKind, string? format) => libKind switch
+    {
+        "assembly" or "package" => format is not null && DotNetFormats.Contains(format),
+        "native" => format is not null && NativeFormats.Contains(format),
+        "npm" or "npm-dev" => format == "npm",
+        // COM components and controls come from VB6, C++ or .NET (COM-visible) projects
+        "com" or "ocx" => format is not null && (format == "vbp" || DotNetFormats.Contains(format) || NativeFormats.Contains(format)),
+        _ => true,
+    };
+
+    /// <summary>.NET Framework / runtime assemblies referenced by name only.</summary>
+    private static bool IsFrameworkAssembly(string? name)
+    {
+        string n = (name ?? "").Split(',')[0].Trim();
+        return n is "System" or "mscorlib" or "netstandard" or "WindowsBase" or "PresentationCore" or "PresentationFramework"
+                   or "Accessibility" or "UIAutomationClient" or "UIAutomationTypes"
+               || n.StartsWith("System.", StringComparison.OrdinalIgnoreCase)
+               || n.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void ProjectLibs()
     {
         foreach (var (pid, info) in _projects)
@@ -954,8 +978,12 @@ public sealed partial class Builder
                 var names = new HashSet<string> { Paths.Stem(lib.File), (lib.Name ?? "").ToLowerInvariant(), Paths.Stem(lib.Path) };
                 names.Remove("");
                 var targets = new HashSet<string>();
-                foreach (var n in names) targets.UnionWith(_projByOutput.GetValueOrDefault(n) ?? []);
+                // a framework assembly (<Reference Include="System" />, no HintPath) is never one of your projects
+                if (!(lib.Kind == "assembly" && string.IsNullOrEmpty(lib.Path) && IsFrameworkAssembly(lib.Name)))
+                    foreach (var n in names) targets.UnionWith(_projByOutput.GetValueOrDefault(n) ?? []);
                 targets.Remove(pid);
+                // only a project that can produce that kind of library: a .NET assembly is no VB6 exe of that name
+                targets.RemoveWhere(t => !CanProvide(lib.Kind, _projects.GetValueOrDefault(t)?.Info.Format));
                 if (targets.Count > 0)
                 {
                     foreach (var t in targets)
