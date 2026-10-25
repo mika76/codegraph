@@ -55,12 +55,13 @@ public static class Scanner
                 FileSystemInfo[] entries;
                 try { entries = dir.GetFileSystemInfos(); }
                 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return; }
+                var fileNames = entries.OfType<FileInfo>().Select(f => f.Name).ToList();
                 foreach (var e in entries.OrderBy(e => e.Name, StringComparer.OrdinalIgnoreCase))
                 {
                     string rel = relDir.Length == 0 ? e.Name : $"{relDir}/{e.Name}";
                     if (e is DirectoryInfo sub)
                     {
-                        if (e.Name.StartsWith('.') || ignore.IsIgnored(rel)) continue;
+                        if (e.Name.StartsWith('.') || ignore.IsIgnored(rel) || IgnoreRules.IsBuildOutput(e.Name, fileNames)) continue;
                         if (sub.Attributes.HasFlag(FileAttributes.ReparsePoint)) continue;
                         Walk(sub, rel);
                     }

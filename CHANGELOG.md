@@ -28,6 +28,15 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 📂 Built-in ignores no longer skip your own code that merely looks like build output or a library:
+  `bin`/`obj` are only skipped next to a project file, `Debug`/`Release`/`x64`/`x86` next to a C++ project or
+  solution, and `packages` next to a solution (a JS monorepo's `packages/` is read now). Library copies are matched
+  as `jquery.js`, `jquery-*.js`, `jquery.*.js`, so `reactions.js` or `bootstrapper.js` are read, and
+  `Reference.cs` is only skipped inside WCF `Service References` folders.
+- 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
+  return type, not by their casing.
+- 🗃️ SQL functions are found under any schema (`sales.net_total(...)`), not just `dbo`, and a string naming a
+  schema-qualified object (`"sales.GetOrders"`) links to it.
 - 🎯 A string that only names a stored procedure (`"GetOrders"`, `"cleanup"`) counts as a call only where the
   surrounding routine uses a database API - ADO, ADO.NET, ODBC, EF raw SQL, `sqlcmd`/`Invoke-Sqlcmd`, node
   `mssql`/`oracledb` - or when it has one of your `proc_prefixes`. A word like `"test"` in UI code no longer links

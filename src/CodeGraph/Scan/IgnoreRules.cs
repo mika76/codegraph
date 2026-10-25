@@ -6,17 +6,43 @@ namespace CodeGraph.Scan;
 /// </summary>
 public sealed class IgnoreRules
 {
+    /// <summary>Copies of well-known libraries: the file itself, or "name-x.js" / "name.x.js" - not "reactions.js".</summary>
+    private static readonly string[] VendoredLibs =
+        ["jquery", "knockout", "modernizr", "globalize", "bootstrap", "angular", "react", "vue", "lodash", "moment"];
+
     public static readonly string[] BuiltIn =
     [
-        ".git", ".svn", ".vs", ".vscode", ".idea", "$tf", "bin", "obj", "packages", "node_modules", "TestResults",
-        "Debug", "Release", "x64", "x86", "_ReSharper*", "*.Designer.cs", "*.designer.cs", "Reference.cs",
+        ".git", ".svn", ".vs", ".vscode", ".idea", "$tf", "node_modules", "TestResults",
+        "_ReSharper*", "*.Designer.cs", "*.designer.cs", "**/Service References/*/Reference.cs",
+        "**/Web References/*/Reference.cs", "**/Connected Services/*/Reference.cs",
         "*.g.cs", "*.g.i.cs", "*.AssemblyInfo.cs", "TemporaryGeneratedFile_*", "*.min.js", "*.debug.js",
-        "*-vsdoc.js", "jquery*.js", "knockout*.js", "modernizr*.js", "globalize*.js", "bootstrap*.js", "dx.*.js",
-        "cordova.js", "angular*.js", "react*.js", "vue*.js", "lodash*.js", "moment*.js", "graphify-out",
-        "codegraph-out", "wwwroot/lib", "*.d.ts", "dist", ".nuxt", ".output", "coverage", "*.bundle.js",
-        "*.chunk.js", "*.map", "Vendor", "vendor", "ThirdParty", "third_party", "* - Backup.*", "*.orig", "*.bak",
-        "rest-examples",
+        "*-vsdoc.js", "dx.*.js", "cordova.js",
+        .. VendoredLibs.SelectMany(l => new[] { $"{l}.js", $"{l}-*.js", $"{l}.*.js" }),
+        "graphify-out", "codegraph-out", "wwwroot/lib", "*.d.ts", "dist", ".nuxt", ".output", "coverage",
+        "*.bundle.js", "*.chunk.js", "*.map", "Vendor", "vendor", "ThirdParty", "third_party", "* - Backup.*",
+        "*.orig", "*.bak",
     ];
+
+    private static readonly string[] ProjectFiles = [".csproj", ".vbproj", ".fsproj", ".vcxproj", ".vcproj", ".dsp", ".sqlproj", ".wixproj"];
+    private static readonly string[] NativeBuildFiles = [".vcxproj", ".vcproj", ".dsp", ".dsw", ".sln", ".slnx"];
+    private static readonly string[] SolutionFiles = [".sln", ".slnx"];
+
+    /// <summary>
+    /// Build output folders are only skipped where a build puts them - bin/obj next to a project file, Debug/Release/
+    /// x64/... next to a C++ project or solution, NuGet's packages next to a solution - so a source folder that happens
+    /// to be called Release, bin or packages (a JS monorepo) is still read.
+    /// </summary>
+    public static bool IsBuildOutput(string dirName, IEnumerable<string> siblingFiles)
+    {
+        string[]? next = dirName.ToLowerInvariant() switch
+        {
+            "bin" or "obj" => ProjectFiles,
+            "debug" or "release" or "x64" or "x86" or "win32" or "arm64" => NativeBuildFiles,
+            "packages" => SolutionFiles,
+            _ => null,
+        };
+        return next is not null && siblingFiles.Any(f => next.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase));
+    }
 
     private readonly List<(bool Negate, string Pattern, bool Anchored)> _rules = [];
 
