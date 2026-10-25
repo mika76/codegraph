@@ -247,17 +247,45 @@ public class QueryTests
     public void Impact_folds_folders_with_many_files()
     {
         var g = SampleGraph.Create();
+        // 7 patch scripts in small folders of their own: one line for the folder above them
         for (int i = 1; i <= 7; i++)
         {
-            string f = $"file:Shop:Database/Patches/Patch{i:D2}.sql";
-            g.Node(f, ("kind", "file"), ("name", $"Patch{i:D2}.sql"), ("path", $"Database/Patches/Patch{i:D2}.sql"), ("area", "Database"));
-            g.AddEdge(f, "db:usp_Save", "alters");
+            string rel = $"Database/Patches {i % 3}/Patch{i:D2}.sql";
+            g.Node("file:Shop:" + rel, ("kind", "file"), ("name", $"Patch{i:D2}.sql"), ("path", rel), ("area", "Database"));
+            g.AddEdge("file:Shop:" + rel, "db:usp_Save", "alters");
         }
         var text = Run(w => GraphQuery.Impact(g, "usp_Save", w, depth: 1));
-        Assert.Contains("   Database/Patches/ (7 files): Patch01.sql, Patch02.sql, Patch03.sql, Patch04.sql, Patch05.sql (+2)\n", text);
-        Assert.DoesNotContain("Patch06.sql", text);
+        Assert.Contains("   Database/ (7 files in 3 folders): ", text);
+        Assert.Equal(1, text.Split('\n').Count(l => l.Contains("Patch")));
+        // code files keep their own line with the routines
+        Assert.Contains("Sales/modDb.bas: Load", text);
         Assert.Contains("(up to 1 step): 8 things", text);
         Assert.Contains("(up to 1 step): 1 thing\n", Run(w => GraphQuery.Impact(SampleGraph.Create(), "modDb.Load", w, depth: 1)));
+    }
+
+    [Fact]
+    public void A_chain_never_goes_down_contains_after_a_call()
+    {
+        var g = new Model.Graph();
+        foreach (var id in new[] { "sym:W:v.vue#View", "sym:W:v.vue#View.refresh", "sym:W:s.ts#useSvc", "sym:W:s.ts#useSvc.load",
+                     "sym:W:s.ts#useSvc.remove", "db:orders" })
+            g.Node(id, ("kind", "function"), ("name", id.Split('#')[^1].Split(':')[^1]), ("qual", id.Split('#')[^1]));
+        g.AddEdge("sym:W:v.vue#View", "sym:W:v.vue#View.refresh", "contains");
+        g.AddEdge("sym:W:v.vue#View.refresh", "sym:W:s.ts#useSvc", "calls");      // calls the factory ...
+        g.AddEdge("sym:W:v.vue#View.refresh", "sym:W:s.ts#useSvc.load", "calls"); // ... and uses load
+        g.AddEdge("sym:W:s.ts#useSvc", "sym:W:s.ts#useSvc.load", "contains");
+        g.AddEdge("sym:W:s.ts#useSvc", "sym:W:s.ts#useSvc.remove", "contains");
+        g.AddEdge("sym:W:s.ts#useSvc.remove", "db:orders", "writes");
+        // remove writes orders, but the view never calls remove: no chain at all, not even a "mixed" one
+        Assert.Equal("No connection found within 8 steps.\n", Run(w => GraphQuery.Path(g, "View", "db:orders", w)));
+        // the start's own members first, and from a used member up to its container last, are fine
+        g.Node("file:W:s.ts", ("kind", "file"), ("name", "s.ts"), ("path", "s.ts"));
+        g.AddEdge("file:W:s.ts", "sym:W:s.ts#useSvc", "contains");
+        Assert.Equal("View (function)\n  --contains--> View.refresh (function)\n  --calls--> useSvc (function)\n" +
+                     "  <--contains-- s.ts (file)  [s.ts]\n", Run(w => GraphQuery.Path(g, "View", "s.ts", w)));
+        // and read the other way round
+        Assert.StartsWith("s.ts (file)  [s.ts]\n  --contains--> useSvc (function)\n  <--calls-- View.refresh (function)\n",
+            Run(w => GraphQuery.Path(g, "s.ts", "View", w)));
     }
 
     [Fact]

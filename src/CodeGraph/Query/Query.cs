@@ -310,21 +310,31 @@ public static class GraphQuery
         foreach (var p in byProj.Keys.Order(StringComparer.Ordinal))
         {
             w.WriteLine(p);
-            // a folder with many affected files (old patch scripts ...) is one line: the folder, a count, a few names
+            // whole files that depend on it (scripts, patches - no routine names) are folded at the highest folder that
+            // holds at least FoldFiles of them: "SQL/ (98 files in 22 folders)"; code files keep their routine names
             var entries = byProj[p].OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList();
-            var bigDirs = entries.Where(kv => kv.Key.Contains('/')).GroupBy(kv => DirOf(kv.Key))
-                .Where(gr => gr.Count() >= FoldFiles).ToDictionary(gr => gr.Key, gr => gr.ToList());
+            bool Plain(KeyValuePair<string, HashSet<string>> kv) => kv.Key.Contains('/') && kv.Value.All(i => i.Length == 0);
+            var under = new Dictionary<string, List<string>>();
+            foreach (var kv in entries.Where(Plain))
+                foreach (var anc in Ancestors(DirOf(kv.Key)))
+                    GetOrAdd(under, anc).Add(kv.Key);
+            string? FoldAt(string key) => Ancestors(DirOf(key)).FirstOrDefault(a => under[a].Count >= FoldFiles);
             var printed = new HashSet<string>();
-            foreach (var (f, set) in entries)
+            foreach (var kv in entries)
             {
-                if (f.Contains('/') && bigDirs.TryGetValue(DirOf(f), out var dir))
+                if (Plain(kv) && FoldAt(kv.Key) is { } dir)
                 {
-                    if (printed.Add(DirOf(f)))
-                        w.WriteLine($"   {DirOf(f)}/ ({dir.Count} files): {List(dir.Select(kv => FileOf(kv.Key)).ToList(), 5)}");
+                    if (printed.Add(dir))
+                    {
+                        var files = under[dir];
+                        int folders = files.Select(DirOf).Distinct().Count();
+                        w.WriteLine($"   {dir}/ ({files.Count} files{(folders > 1 ? $" in {folders} folders" : "")}): " +
+                                    List(files.Select(FileOf).ToList(), 5));
+                    }
                     continue;
                 }
-                var items = set.Where(i => i.Length > 0).Order(StringComparer.Ordinal).ToList();
-                w.WriteLine($"   {f}{(items.Count > 0 ? ": " + List(items, 8) : "")}");
+                var items = kv.Value.Where(i => i.Length > 0).Order(StringComparer.Ordinal).ToList();
+                w.WriteLine($"   {kv.Key}{(items.Count > 0 ? ": " + List(items, 8) : "")}");
             }
         }
     }
@@ -336,6 +346,17 @@ public static class GraphQuery
     private static string PathOf(string key) => key.Split("  ", 2)[0];
     private static string DirOf(string key) => PathOf(key) is var p && p.LastIndexOf('/') is var i and > 0 ? p[..i] : "";
     private static string FileOf(string key) => PathOf(key) is var p ? p[(p.LastIndexOf('/') + 1)..] : key;
+
+    /// <summary>"a/b/c" -> "a", "a/b", "a/b/c" (shallowest first).</summary>
+    private static IEnumerable<string> Ancestors(string dir)
+    {
+        if (dir.Length == 0) yield break;
+        for (int i = dir.IndexOf('/'); i > 0; i = dir.IndexOf('/', i + 1)) yield return dir[..i];
+        yield return dir;
+    }
+
+    private static List<string> GetOrAdd(Dictionary<string, List<string>> d, string key) =>
+        d.TryGetValue(key, out var l) ? l : d[key] = [];
 
     /// <summary>
     /// Shortest chain (at most <paramref name="maxLen"/> steps) between two things over all relations. A one-way
@@ -358,18 +379,18 @@ public static class GraphQuery
             (fwd.TryGetValue(e.Source, out var l) ? l : fwd[e.Source] = []).Add((e.Target, e.Relation, "->"));
             (back.TryGetValue(e.Target, out var l2) ? l2 : back[e.Target] = []).Add((e.Source, e.Relation, "<-"));
         }
-        var down = Bfs(s, t, n => fwd.GetValueOrDefault(n) ?? [], maxLen);
-        var up = Bfs(s, t, n => back.GetValueOrDefault(n) ?? [], maxLen);
+        var down = UseChain(s, t, fwd, back, maxLen);
+        // t uses ... s: the same search from t, read backwards
+        var up = UseChain(t, s, fwd, back, maxLen) is { } fromT ? Reversed(t, fromT) : null;
         var steps = down is null ? up : up is null || down.Count <= up.Count ? down : up;
         bool mixed = false;
         if (steps is null)
         {
             // a chain that changes direction must not pass through hubs: two things in the same release, patch,
-            // installer or project are not connected by that (a hub at either end is fine: rel:2.0 -> what it ships)
+            // installer, project or file/type are not connected by that (a hub at either end is fine: rel:2.0 -> what
+            // it ships, a file -> its routines)
             bool Hub(string from, (string Next, string Rel, string Dir) e) =>
-                from != s && e.Next != t
-                && (e.Rel is "released_in" or "defined_in" or "ships"
-                    || (e.Rel == "contains" && (e.Dir == "->" ? from : e.Next).StartsWith("proj:", StringComparison.Ordinal)));
+                from != s && e.Next != t && e.Rel is "released_in" or "defined_in" or "ships" or "contains";
             steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []).Where(e => !Hub(n, e)), maxLen);
             mixed = steps is not null;
         }
@@ -388,6 +409,59 @@ public static class GraphQuery
         if (mixed)
             w.WriteLine("(No one-way chain: this path changes direction, e.g. both ends use the same thing or are used " +
                         "by the same thing, so it may not be a real dependency.)");
+    }
+
+    /// <summary>
+    /// The shortest chain by which s uses t. `contains` only counts at the ends: going down into s's own members
+    /// first (a file uses what its routines use), or up from a used member to t last (using useOrders.load uses
+    /// useOrders) - never in the middle, where it would claim that calling a factory or class uses all its members.
+    /// </summary>
+    private static List<(string Rel, string Dir, string Node)>? UseChain(string s, string t,
+        Dictionary<string, List<(string Next, string Rel, string Dir)>> fwd,
+        Dictionary<string, List<(string Next, string Rel, string Dir)>> back, int maxLen)
+    {
+        // phase 0: still inside s; 1: after a use; 2: climbing from a used member to its containers
+        var start = (s, 0);
+        var prev = new Dictionary<(string Node, int Phase), ((string, int) From, string Rel, string Dir, int Depth)> { [start] = (start, "", "", 0) };
+        var q = new Queue<(string Node, int Phase)>();
+        q.Enqueue(start);
+        (string Node, int Phase)? end = null;
+        while (q.Count > 0 && end is null)
+        {
+            var cur = q.Dequeue();
+            int depth = prev[cur].Depth;
+            if (depth >= maxLen) continue;
+            var moves = new List<(string Next, string Rel, string Dir, int Phase)>();
+            foreach (var (nxt, rel, _) in fwd.GetValueOrDefault(cur.Node) ?? [])
+                if (rel == "contains") { if (cur.Phase == 0) moves.Add((nxt, rel, "->", 0)); }
+                else if (cur.Phase <= 1) moves.Add((nxt, rel, "->", 1));
+            if (cur.Phase >= 1)
+                foreach (var (nxt, rel, _) in back.GetValueOrDefault(cur.Node) ?? [])
+                    if (rel == "contains") moves.Add((nxt, rel, "<-", 2));
+            foreach (var (nxt, rel, dir, ph) in moves)
+            {
+                var key = (nxt, ph);
+                if (prev.ContainsKey(key)) continue;
+                prev[key] = (cur, rel, dir, depth + 1);
+                if (nxt == t) { end = key; break; }
+                q.Enqueue(key);
+            }
+        }
+        if (end is null) return null;
+        var steps = new List<(string Rel, string Dir, string Node)>();
+        for (var k = end.Value; k != start; k = prev[k].From)
+            steps.Add((prev[k].Rel, prev[k].Dir, k.Node));
+        steps.Reverse();
+        return steps;
+    }
+
+    /// <summary>A chain from t to s, written from s: each step back to the node before it, arrows flipped.</summary>
+    private static List<(string Rel, string Dir, string Node)> Reversed(string t, List<(string Rel, string Dir, string Node)> fromT)
+    {
+        var result = new List<(string Rel, string Dir, string Node)>();
+        for (int i = fromT.Count - 1; i >= 0; i--)
+            result.Add((fromT[i].Rel, fromT[i].Dir == "->" ? "<-" : "->", i == 0 ? t : fromT[i - 1].Node));
+        return result;
     }
 
     private static List<(string Rel, string Dir, string Node)>? Bfs(string s, string t,
