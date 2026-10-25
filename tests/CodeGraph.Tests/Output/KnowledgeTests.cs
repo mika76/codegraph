@@ -184,6 +184,22 @@ public sealed class KnowledgeTests : IDisposable
         Assert.Null(g.GetEdge("proj:Other:p", "rel:2.4.0", "released_in"));
     }
 
+    [Fact]
+    public void A_release_named_by_branch_and_releases_json_is_counted_once()
+    {
+        var g = SampleGraph.Create();
+        g.GetNode(SampleGraph.Proj)!["version"] = "1.2.3";
+        KnowledgeLoader.ApplyBranchReleases(g);
+        string path = Path.Combine(_dir, "releases.json");
+        File.WriteAllText(path, """{ "releases": [ { "version": "2.4.0", "modules": [ { "Order Entry": "1.2.4" } ] } ] }""");
+        var warnings = new List<string>();
+        KnowledgeLoader.ApplyReleases(g, path, warnings);
+        var e = g.GetEdge(SampleGraph.Proj, "rel:2.4.0", "released_in")!;
+        Assert.Equal(1, e.Count);
+        Assert.Equal("1.2.4", e.Str("version"));
+        Assert.Empty(warnings);
+    }
+
     [Theory]
     [InlineData("R2.4.0", "2.4.0")]
     [InlineData("release/2.4", "2.4")]

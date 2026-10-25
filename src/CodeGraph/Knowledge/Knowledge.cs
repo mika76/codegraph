@@ -178,7 +178,7 @@ public static class KnowledgeLoader
                     warnings.Add($"releases {version}: module '{modName}' did not match any project/folder/object (kept as a plain name)");
                 }
                 foreach (var t in targets)
-                    g.AddEdge(t, rid, "released_in", attrs: ("version", modVer));
+                    AddRelease(g, t, rid, modVer, null);
             }
         }
     }
@@ -355,10 +355,24 @@ public static class KnowledgeLoader
             foreach (var n in g.Nodes.Where(n => n.Kind == "project" && n.Str("repo") == rn.Name).ToList())
             {
                 string? pv = n.Str("version");
-                g.AddEdge(n.Id, rid, "released_in",
-                    attrs: [("version", string.IsNullOrEmpty(pv) ? null : pv), ("via", "branch")]);
+                AddRelease(g, n.Id, rid, string.IsNullOrEmpty(pv) ? null : pv, "branch");
             }
         }
+    }
+
+    /// <summary>
+    /// Record that a module is part of a release. Membership is a fact, not an occurrence: when another source
+    /// (branch name, releases.json) already recorded it, the count stays 1. A version from releases.json replaces
+    /// the project version taken for a branch release; otherwise the first version stays.
+    /// </summary>
+    private static void AddRelease(Graph g, string module, string rid, string? version, string? via)
+    {
+        if (g.GetEdge(module, rid, "released_in") is { } e)
+        {
+            if (version is not null && via is null && e.Str("via") == "branch") e["version"] = version;
+            return;
+        }
+        g.AddEdge(module, rid, "released_in", attrs: [("version", version), ("via", via)]);
     }
 }
 
