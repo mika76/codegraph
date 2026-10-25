@@ -150,11 +150,10 @@ public sealed partial class Builder
         _g.Meta["stats"] = stats;
         var unresolved = new JsonObject();
         var firstSeen = new JsonObject();
-        foreach (var (k, v) in _unresolved.OrderByDescending(kv => kv.Value).Take(200))
-        {
-            unresolved[k] = v;
-            if (_firstSeen.TryGetValue(k, out var at)) firstSeen[k] = at;
-        }
+        foreach (var (k, v) in _unresolved.OrderByDescending(kv => kv.Value).Take(200)) unresolved[k] = v;
+        // every missing procedure is listed in the report, so keep where each was first called
+        foreach (var (k, at) in _firstSeen.Where(kv => kv.Key.StartsWith("exec:", StringComparison.Ordinal)).OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            firstSeen[k] = at;
         _g.Meta["unresolved"] = unresolved;
         _g.Meta["unresolved_at"] = firstSeen;
         return _g;
