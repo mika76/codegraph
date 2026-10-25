@@ -242,6 +242,9 @@ public static class GraphQuery
                 if (g.GetNode(e.Target) is { } m && IsInit(m))
                     (inn.TryGetValue(e.Target, out var li) ? li : inn[e.Target] = []).Add(e.Source);
             }
+            // a view shows what the action that renders it computed (model, ViewBag): an affected action affects it
+            if (e.Relation == "renders")
+                (inn.TryGetValue(e.Source, out var lv) ? lv : inn[e.Source] = []).Add(e.Target);
         }
         // a file / type / project is affected through its contained symbols too
         var start = new HashSet<string> { nid };

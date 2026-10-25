@@ -340,6 +340,27 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Impact_on_an_action_includes_the_view_it_renders()
+    {
+        var g = new Graph();
+        g.Node("db:revenue", ("kind", "db_table"), ("name", "Revenue"));
+        g.Node("sym:W:Repo.cs#Repo.Total", ("kind", "method"), ("name", "Total"), ("qual", "Repo.Total"));
+        g.Node("sym:W:MainController.cs#MainController.Index", ("kind", "method"), ("name", "Index"), ("qual", "MainController.Index"));
+        g.Node("sym:W:Views/Main/Index.cshtml#Index", ("kind", "view"), ("name", "Index"), ("qual", "Main/Index view"));
+        g.Node("sym:W:Views/Main/Other.cshtml#Other", ("kind", "view"), ("name", "Other"), ("qual", "Main/Other view"));
+        g.AddEdge("sym:W:Repo.cs#Repo.Total", "db:revenue", "reads");
+        g.AddEdge("sym:W:MainController.cs#MainController.Index", "sym:W:Repo.cs#Repo.Total", "calls");
+        g.AddEdge("sym:W:MainController.cs#MainController.Index", "sym:W:Views/Main/Index.cshtml#Index", "renders");
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "Revenue", w, depth: 3);
+        Assert.Contains("3 things", w.ToString());   // the repo method, the action, and the page that shows its data
+        // a view still affects the action rendering it (the existing direction)
+        var w2 = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "Main/Index view", w2, depth: 1);
+        Assert.Contains("1 thing", w2.ToString());
+    }
+
+    [Fact]
     public void A_navigation_link_is_links_to_and_impact_does_not_follow_it()
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("MainController", "class"), Sym("Index", "method", "MainController")] };

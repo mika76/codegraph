@@ -118,6 +118,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   wrapper such as `orders.create('/orders')` - links when it matches a server route, and is not listed as an
   unmatched call when it doesn't. Router navigation (`router.push`, `navigateTo`, ...) is never an API call, and
   paths like `/2fa/verify` or `/:id/edit` are recognised.
+- 🖼️ `impact` includes the views an affected controller action renders: they show its model / ViewBag, so a
+  changed action affects the page that displays it.
 - 🔗 Razor: a link the user follows (`<a href="@Url.Action(...)">`, `Html.ActionLink`, `<a asp-action>`,
   `location.href = ...`) is `links_to`, not `calls_api`, and `impact` does not follow it - a breadcrumb to the
   dashboard no longer makes every page depend on the dashboard's data. Ajax / fetch URLs, forms and child actions
