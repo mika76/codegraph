@@ -235,7 +235,12 @@ public static class GraphQuery
             if (DepRels.Contains(e.Relation))
                 (inn.TryGetValue(e.Target, out var l) ? l : inn[e.Target] = []).Add(e.Source);
             if (e.Relation == "contains")
+            {
                 (contains.TryGetValue(e.Source, out var c) ? c : contains[e.Source] = []).Add(e.Target);
+                // a form / class runs its init members when opened or created: they affect it, and so who opens it
+                if (g.GetNode(e.Target) is { } m && IsInit(m))
+                    (inn.TryGetValue(e.Target, out var li) ? li : inn[e.Target] = []).Add(e.Source);
+            }
         }
         // a file / type / project is affected through its contained symbols too
         var start = new HashSet<string> { nid };
@@ -379,18 +384,18 @@ public static class GraphQuery
             (fwd.TryGetValue(e.Source, out var l) ? l : fwd[e.Source] = []).Add((e.Target, e.Relation, "->"));
             (back.TryGetValue(e.Target, out var l2) ? l2 : back[e.Target] = []).Add((e.Source, e.Relation, "<-"));
         }
-        var down = UseChain(s, t, fwd, back, maxLen);
+        var down = UseChain(g, s, t, fwd, back, maxLen);
         // t uses ... s: the same search from t, read backwards
-        var up = UseChain(t, s, fwd, back, maxLen) is { } fromT ? Reversed(t, fromT) : null;
+        var up = UseChain(g, t, s, fwd, back, maxLen) is { } fromT ? Reversed(t, fromT) : null;
         var steps = down is null ? up : up is null || down.Count <= up.Count ? down : up;
         bool mixed = false;
         if (steps is null)
         {
             // a chain that changes direction must not pass through hubs: two things in the same release, patch,
-            // installer, project or file/type are not connected by that (a hub at either end is fine: rel:2.0 -> what
-            // it ships, a file -> its routines)
+            // installer, project or file/type, or using the same constant, are not connected by that (a hub at either
+            // end is fine: rel:2.0 -> what it ships, a file -> its routines)
             bool Hub(string from, (string Next, string Rel, string Dir) e) =>
-                from != s && e.Next != t && e.Rel is "released_in" or "defined_in" or "ships" or "contains";
+                from != s && e.Next != t && e.Rel is "released_in" or "defined_in" or "ships" or "contains" or "uses_value";
             steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []).Where(e => !Hub(n, e)), maxLen);
             mixed = steps is not null;
         }
@@ -416,11 +421,12 @@ public static class GraphQuery
     /// first (a file uses what its routines use), or up from a used member to t last (using useOrders.load uses
     /// useOrders) - never in the middle, where it would claim that calling a factory or class uses all its members.
     /// </summary>
-    private static List<(string Rel, string Dir, string Node)>? UseChain(string s, string t,
+    private static List<(string Rel, string Dir, string Node)>? UseChain(Graph g, string s, string t,
         Dictionary<string, List<(string Next, string Rel, string Dir)>> fwd,
         Dictionary<string, List<(string Next, string Rel, string Dir)>> back, int maxLen)
     {
-        // phase 0: still inside s; 1: after a use; 2: climbing from a used member to its containers
+        // phase 0: still inside s; 1: after a use; 2: climbing from a used member to its containers;
+        // 3: just opened / created a form or class - its initialisation runs, so its init members may follow
         var start = (s, 0);
         var prev = new Dictionary<(string Node, int Phase), ((string, int) From, string Rel, string Dir, int Depth)> { [start] = (start, "", "", 0) };
         var q = new Queue<(string Node, int Phase)>();
@@ -433,8 +439,12 @@ public static class GraphQuery
             if (depth >= maxLen) continue;
             var moves = new List<(string Next, string Rel, string Dir, int Phase)>();
             foreach (var (nxt, rel, _) in fwd.GetValueOrDefault(cur.Node) ?? [])
-                if (rel == "contains") { if (cur.Phase == 0) moves.Add((nxt, rel, "->", 0)); }
-                else if (cur.Phase <= 1) moves.Add((nxt, rel, "->", 1));
+                if (rel == "contains")
+                {
+                    if (cur.Phase == 0) moves.Add((nxt, rel, "->", 0));
+                    else if (cur.Phase == 3 && g.GetNode(nxt) is { } m && IsInit(m)) moves.Add((nxt, rel, "->", 1));
+                }
+                else if (cur.Phase is <= 1 or 3) moves.Add((nxt, rel, "->", rel is "opens" or "instantiates" ? 3 : 1));
             if (cur.Phase >= 1)
                 foreach (var (nxt, rel, _) in back.GetValueOrDefault(cur.Node) ?? [])
                     if (rel == "contains") moves.Add((nxt, rel, "<-", 2));
@@ -454,6 +464,16 @@ public static class GraphQuery
         steps.Reverse();
         return steps;
     }
+
+    /// <summary>VB6 runtime events that run when a form, class or control is loaded or created.</summary>
+    private static readonly HashSet<string> InitEvents = new(StringComparer.OrdinalIgnoreCase)
+        { "Form_Load", "Form_Initialize", "Form_Activate", "Class_Initialize", "UserControl_Initialize", "UserControl_InitProperties" };
+
+    /// <summary>
+    /// A member that runs when its form or class is opened or created: a constructor, or one of the VB6 runtime's
+    /// load/initialise events - so opening the form uses what these use, and changing them affects who opens it.
+    /// </summary>
+    private static bool IsInit(Node n) => n.Kind == "constructor" || InitEvents.Contains(n.Name);
 
     /// <summary>A chain from t to s, written from s: each step back to the node before it, arrows flipped.</summary>
     private static List<(string Rel, string Dir, string Node)> Reversed(string t, List<(string Rel, string Dir, string Node)> fromT)

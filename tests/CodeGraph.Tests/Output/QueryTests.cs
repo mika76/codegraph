@@ -289,6 +289,36 @@ public class QueryTests
     }
 
     [Fact]
+    public void Opening_a_form_runs_its_load_event()
+    {
+        var g = new Model.Graph();
+        void Sym(string id, string kind) => g.Node(id, ("kind", kind), ("name", id.Split('.')[^1].Split('#')[^1]), ("qual", id.Split('#')[^1]));
+        Sym("sym:A:frmMain.frm#frmMain.cmdGo_Click", "event_handler");
+        Sym("sym:A:frmGo.frm#frmGo", "form");
+        Sym("sym:A:frmGo.frm#frmGo.Form_Load", "event_handler");
+        Sym("sym:A:frmGo.frm#frmGo.Fill", "sub");
+        Sym("sym:A:frmGo.frm#frmGo.cmdDelete_Click", "event_handler");
+        g.Node("db:orders", ("kind", "db_table"), ("name", "Orders"));
+        g.Node("db:audit", ("kind", "db_table"), ("name", "Audit"));
+        g.AddEdge("sym:A:frmMain.frm#frmMain.cmdGo_Click", "sym:A:frmGo.frm#frmGo", "opens");
+        g.AddEdge("sym:A:frmGo.frm#frmGo", "sym:A:frmGo.frm#frmGo.Form_Load", "contains");
+        g.AddEdge("sym:A:frmGo.frm#frmGo", "sym:A:frmGo.frm#frmGo.Fill", "contains");
+        g.AddEdge("sym:A:frmGo.frm#frmGo", "sym:A:frmGo.frm#frmGo.cmdDelete_Click", "contains");
+        g.AddEdge("sym:A:frmGo.frm#frmGo.Form_Load", "sym:A:frmGo.frm#frmGo.Fill", "calls");
+        g.AddEdge("sym:A:frmGo.frm#frmGo.Fill", "db:orders", "reads");
+        g.AddEdge("sym:A:frmGo.frm#frmGo.cmdDelete_Click", "db:audit", "writes");
+        // opening the form runs Form_Load, which reads Orders
+        var steps = Run(w => GraphQuery.Path(g, "frmMain.cmdGo_Click", "Orders", w)).Split('\n')
+            .Where(l => l.StartsWith("  ", StringComparison.Ordinal)).Select(l => l.Trim().Split(' ')[0]).ToList();
+        Assert.Equal(["--opens-->", "--contains-->", "--calls-->", "--reads-->"], steps);
+        // a button on the opened form is not run by opening it
+        Assert.DoesNotContain("--opens-->", Run(w => GraphQuery.Path(g, "frmMain.cmdGo_Click", "Audit", w)));
+        // and impact on Orders reaches the button that opens the form
+        Assert.Contains("cmdGo_Click", Run(w => GraphQuery.Impact(g, "Orders", w, depth: 5)));
+        Assert.DoesNotContain("cmdGo_Click", Run(w => GraphQuery.Impact(g, "Audit", w, depth: 5)));
+    }
+
+    [Fact]
     public void Mixed_paths_do_not_go_through_releases_or_projects()
     {
         var g = PathGraph();

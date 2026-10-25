@@ -39,7 +39,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🧭 `path` no longer connects two things through a hub when it has to change direction: two screens in the same
   release, patch, installer or project are not "connected" by that. A chain also never goes down `contains` after a
   call: calling a factory or class does not mean using all of its members (`contains` counts only at the ends - a
-  file's own routines first, or a used member's container last).
+  file's own routines first, or a used member's container last). Opening a form or creating an object does run its
+  initialisation: after `opens` / `instantiates` a chain continues into the constructor or the VB6 `Form_Load` /
+  `Form_Initialize` / `Class_Initialize` events, and `impact` on what those use reaches the code that opens the form.
+  A constant used in many places is no hub for mixed chains either.
 - 📨 `codegraph mcp` answers a JSON-RPC batch or other non-object with "Invalid request" (-32600), not "Parse error".
 - 🆔 A name shaped like a node id (`db:orders`, `sym:...`) is looked up as an id only, ignoring case: one that
   doesn't exist gives "No node has the id ..." instead of silently answering about another node that contains the
