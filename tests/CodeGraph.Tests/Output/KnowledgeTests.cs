@@ -206,15 +206,36 @@ public sealed class KnowledgeTests : IDisposable
     [InlineData("rel-1.2", "1.2")]
     [InlineData("v2.0.1", "2.0.1")]
     [InlineData("3.1", "3.1")]
+    [InlineData("releases/v2.4.1", "2.4.1")]
+    [InlineData("hotfix/2.4.1-rc1", "2.4.1")]
+    [InlineData("release/2.4.0-hotfix", "2.4.0")]
+    [InlineData("R2_4_0", "2.4.0")]
+    [InlineData("release/2024-10", "2024.10")]
+    [InlineData("release-35", "35")]
+    [InlineData("support/3.x", null)]
     [InlineData("main", null)]
     [InlineData("R2", null)]
+    [InlineData("v2", null)]
     [InlineData("feature/R2.4.0", null)]
+    [InlineData("bugfix/123-crash", null)]
     public void Branch_names(string branch, string? version)
     {
         var g = new Graph();
         g.Node("repo:X", ("kind", "repo"), ("name", "X"), ("branch", branch));
         KnowledgeLoader.ApplyBranchReleases(g);
         Assert.Equal(version, g.Nodes.FirstOrDefault(n => n.Kind == "release")?.Name);
+    }
+
+    [Fact]
+    public void Git_branch_follows_a_gitdir_file()
+    {
+        string repo = Path.Combine(_dir, "wt");
+        string real = Path.Combine(_dir, "main-repo", ".git", "worktrees", "wt");
+        Directory.CreateDirectory(repo);
+        Directory.CreateDirectory(real);
+        File.WriteAllText(Path.Combine(real, "HEAD"), "ref: refs/heads/release/3.1\n");
+        File.WriteAllText(Path.Combine(repo, ".git"), "gitdir: ../main-repo/.git/worktrees/wt\n");
+        Assert.Equal("release/3.1", KnowledgeLoader.GitBranch(repo));
     }
 
     [Fact]

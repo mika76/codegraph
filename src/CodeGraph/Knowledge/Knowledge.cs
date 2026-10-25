@@ -320,18 +320,39 @@ public static class KnowledgeLoader
     }
 
     // ------------------------------------------------------------------ branches
-    private static readonly Regex BranchRe = new(@"^(?:release[/_-]?|rel[/_-]?|r|v)?(\d+(?:\.\d+)+)$",
+    // R2.4.0, release/2.4, releases/v2.4.1, hotfix/2.4.1-rc1, R2_4_0, release/2024-10, v2.0 ... and a single
+    // number only with an explicit release prefix (release-35); feature/... branches never count
+    private static readonly Regex BranchRe = new(
+        @"^(?:(?:(?:release|releases|rel|hotfix|support)[/_-]?[vr]?|[rv])?(\d+(?:[._-]\d+)+)" +
+        @"|(?:release|releases|rel)[/_-]?[vr]?(\d+))(?:[-+][A-Za-z][\w.-]*)?$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    /// <summary>The release version a branch name stands for (separators normalised to dots), or null.</summary>
+    public static string? BranchVersion(string branch)
+    {
+        var m = BranchRe.Match(branch);
+        if (!m.Success) return null;
+        string v = m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value;
+        return v.Replace('_', '.').Replace('-', '.');
+    }
 
     /// <summary>
     /// The checked-out branch of a repo, read from .git/HEAD (no git CLI needed); a detached HEAD gives the
-    /// first 12 characters of the commit id; null when there is no .git/HEAD. (Python <c>_git_branch</c>.)
+    /// first 12 characters of the commit id; null when there is no .git/HEAD. A .git file (worktree, submodule)
+    /// is followed to its "gitdir:".
     /// </summary>
     public static string? GitBranch(string repoPath)
     {
         try
         {
-            string head = File.ReadAllText(Path.Combine(repoPath, ".git", "HEAD"), Encoding.UTF8).Trim();
+            string gitDir = Path.Combine(repoPath, ".git");
+            if (File.Exists(gitDir))
+            {
+                string link = File.ReadAllText(gitDir, Encoding.UTF8).Trim();
+                if (!link.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase)) return null;
+                gitDir = Path.GetFullPath(Path.Combine(repoPath, link["gitdir:".Length..].Trim()));
+            }
+            string head = File.ReadAllText(Path.Combine(gitDir, "HEAD"), Encoding.UTF8).Trim();
             const string marker = "refs/heads/";
             int i = head.IndexOf(marker, StringComparison.Ordinal);
             return i >= 0 ? head[(i + marker.Length)..] : head[..Math.Min(12, head.Length)];
@@ -346,9 +367,7 @@ public static class KnowledgeLoader
         foreach (var rn in g.Nodes.Where(n => n.Kind == "repo").ToList())
         {
             string branch = rn.Str("branch") ?? "";
-            var m = BranchRe.Match(branch);
-            if (!m.Success) continue;
-            string version = m.Groups[1].Value;
+            if (BranchVersion(branch) is not { } version) continue;
             string rid = $"rel:{version}";
             if (!g.HasNode(rid))
                 g.Node(rid, ("kind", "release"), ("name", version), ("status", $"from branch {branch}"));
