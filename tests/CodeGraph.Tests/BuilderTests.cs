@@ -262,6 +262,7 @@ public class BuilderTests
     [InlineData("api/orders/{}", "stock/{}")]
     [InlineData("a/b/c/d/orders", "orders")]     // more than three extra segments
     [InlineData("orders", "orders/{}")]          // dropping the route's 'orders' leaves only a parameter
+    [InlineData("getparameters", "reports/getparameters")] // 'reports' is one controller's name, not a base path
     public void Api_calls_do_not_match_on_parameters_or_unrelated_paths(string called, string route)
     {
         var r = MatchOne(called, route);
@@ -295,8 +296,12 @@ public class BuilderTests
         var call = new Ref { Kind = "endpoint", Name = called, Line = 3 };
         call.X["verb"] = "GET";
         ts.Refs.Add(call);
+        // a second controller under the same base path (svc/v1/...), so svc/v1 counts as a server base path
+        var other = new FileFacts { Lang = "csharp", Symbols = [Sym("StockController", "class"), Sym("List", "method", "StockController")] };
+        other.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "svc/v1/stock/list" });
         return Builder.BuildGraph(Cfg("Api", "StaffApp"),
-            [Rec("Api/InventoryController.cs", ctl, "Api", "C:/repos/Api"), Rec("src/api.ts", ts, "StaffApp", "C:/repos/StaffApp")]);
+            [Rec("Api/InventoryController.cs", ctl, "Api", "C:/repos/Api"), Rec("Api/StockController.cs", other, "Api", "C:/repos/Api"),
+             Rec("src/api.ts", ts, "StaffApp", "C:/repos/StaffApp")]);
     }
 
     [Fact]

@@ -134,6 +134,9 @@ public static partial class JavaScriptParser
     [GeneratedRegex(@"^(?:\$\{[^}]*\})+", O)]
     private static partial Regex LeadingTemplateExpr();
 
+    [GeneratedRegex(@"^:\d+(?=/|$)", O)]
+    private static partial Regex LeadingPort();
+
     // a path of one or more segments; a segment may start with a digit, ':' or '{' (/2fa/verify, /:id/edit) - the
     // caller also requires a letter somewhere, so 12/31 is no URL
     [GeneratedRegex(@"^(?:https?://[^/\s]+)?/?[\w:{$][\w.\-${}:]*/[\w.\-${}:/]*(?:\?.*)?$|^/[\w:{$][\w.\-${}:]*$", O)]
@@ -557,6 +560,8 @@ public static partial class JavaScriptParser
             string s_ = lit.Value;
             if (importPos.Contains(pos)) continue;
             string raw = LeadingTemplateExpr().Replace(s_.Trim(), "");
+            // `${host}:8524/x` - what follows a host expression may be its port
+            if (raw.Length < s_.Trim().Length) raw = LeadingPort().Replace(raw, "");
             if (!UrlLike().IsMatch(raw) || !raw.Any(char.IsLetter)) continue;
             if (AssetExt().IsMatch(raw.Split('?')[0])) continue;
             string before = Sub(code, pos - 80, pos);

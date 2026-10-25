@@ -12,6 +12,8 @@ public sealed partial class Builder
     private readonly Dictionary<string, string?> _entryCache = [];
     /// <summary>Segment count -> routes (verb, segments, symbol id).</summary>
     private readonly Dictionary<int, List<(string? Verb, string[] Segs, string Sid)>> _routes = [];
+    private readonly Dictionary<string, HashSet<string>> _prefixOwners = [];
+    private HashSet<string> _basePaths = [];
 
     /// <summary>Resolve import specifiers to files; remember local names for call resolution.</summary>
     private void JsImports()
@@ -227,9 +229,15 @@ public sealed partial class Builder
                 {
                     string[] segs = path.Length > 0 ? path.Split('/') : [];
                     GetOrAdd(_routes, segs.Length).Add((verb, segs, sid));
+                    for (int k = 1; k <= 3 && k < segs.Length && segs[k - 1] != "{}"; k++)
+                        GetOrAdd(_prefixOwners, string.Join('/', segs[..k])).Add(r.Rel + "#" + sym.Parent);
                 }
             }
+        // a server-side base path (api, api/v1) is a prefix that routes of several controllers share; a prefix of
+        // one controller only is its own name, which a call must not skip
+        _basePaths = _prefixOwners.Where(kv => kv.Value.Count >= 2).Select(kv => kv.Key).ToHashSet();
     }
+
 
     /// <summary>
     /// Controller actions a called path can reach. Client and server often disagree on a base path ("/api", "/v1",
@@ -267,10 +275,10 @@ public sealed partial class Builder
                 if (skip < segs.Length && Fixed(segs[..skip]) && segs[skip..].Any(s => s != "{}"))
                     foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(segs.Length - skip) ?? [])
                         Compare(segs[skip..], rsegs, rverb, sid);
-                // the route has one
+                // the route has one (shared by several controllers, so not a controller's own name)
                 if (segs.Any(s => s != "{}"))
                     foreach (var (rverb, rsegs, sid) in _routes.GetValueOrDefault(segs.Length + skip) ?? [])
-                        if (Fixed(rsegs[..skip])) Compare(segs, rsegs[skip..], rverb, sid);
+                        if (_basePaths.Contains(string.Join('/', rsegs[..skip]))) Compare(segs, rsegs[skip..], rverb, sid);
             }
             if (best.Count > 0) return best.Count <= 3 ? best : [];
         }

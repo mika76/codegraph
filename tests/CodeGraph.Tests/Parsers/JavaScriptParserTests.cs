@@ -154,11 +154,13 @@ public class JavaScriptParserTests
               navigateTo('/reports')
               format('12/31')
               page(':view/:id')
+              fetch(`${host}:8524/stats/today`)
             }
             """;
         var eps = JavaScriptParser.Parse("svc.ts", src).Refs.Where(r => r.Kind == "endpoint").ToList();
-        Assert.Equal(["orders", "stock/{}/moves", "home/page", "2fa/verify"], eps.Select(r => r.Name));
-        Assert.All(eps, r => Assert.True(r.X.ContainsKey("candidate")));
+        Assert.Equal(["orders", "stock/{}/moves", "home/page", "2fa/verify", "stats/today"], eps.Select(r => r.Name));
+        Assert.All(eps.SkipLast(1), r => Assert.True(r.X.ContainsKey("candidate")));
+        Assert.False(eps[^1].X.ContainsKey("candidate")); // fetch() is a known HTTP API; :8524 was the port
         Assert.All(eps, r => Assert.False(r.X.ContainsKey("verb")));
     }
 

@@ -52,7 +52,7 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   unmatched call when it doesn't. Router navigation (`router.push`, `navigateTo`, ...) is never an API call, and
   paths like `/2fa/verify` or `/:id/edit` are recognised.
 - 🔗 Front-end calls match API routes whatever the base path (`/api`, `/v1`, `/backend/api`, or a prefix only the
-  server has), not just a leading `/api`.
+  server has - one that routes of several controllers share), not just a leading `/api`.
 - 🌿 More release branch names are understood - `releases/v2.4.1`, `hotfix/2.4.1-rc1`, `R2_4_0`,
   `release/2024-10`, `release-35` - and the branch is also read in git worktrees and submodules (`.git` file).
 - 🗃️ SQL functions are found under any schema (`sales.net_total(...)`), not just `dbo`, and a string naming a
