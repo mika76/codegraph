@@ -143,10 +143,10 @@ public class CSharpParserTests
         var f = CSharpParser.Parse("Client.cs", """
             public class Client
             {
-                #region Today Revenue
+                #region Today's sales
                 public async Task<decimal> GetToday() { return await Get("api/today"); }
                 #endregion
-                #region Yesterday's revenue (old API) - v2.1
+                #region Yesterday's sales (old API) - v2.1
                 public decimal GetYesterday() => 0;
                 #endregion
                 #endregion
@@ -171,9 +171,9 @@ public class CSharpParserTests
         var f = CSharpParser.Parse("ApiClient.cs", """
             class ApiClient
             {
-                async Task<decimal> GetMonthRevenue(int site)
+                async Task<decimal> GetMonthTotal(int site)
                 {
-                    string query = $"api/Stats/MonthRevenue/{site}";
+                    string query = $"api/Sales/MonthTotal/{site}";
                     var response = await client.GetAsync(query);
                     return 0;
                 }
@@ -183,8 +183,8 @@ public class CSharpParserTests
             }
             """);
         var eps = f.Refs.Where(r => r.Kind == "endpoint").ToList();
-        var month = eps.Single(r => r.From == "GetMonthRevenue");
-        Assert.Equal("api/stats/monthrevenue/{}", month.Name);
+        var month = eps.Single(r => r.From == "GetMonthTotal");
+        Assert.Equal("api/sales/monthtotal/{}", month.Name);
         Assert.Equal("get", (string)month.X["verb"]!);
         Assert.True(month.X.ContainsKey("candidate"));
         Assert.Equal("post", (string)eps.Single(r => r.From == "Save").X["verb"]!);
@@ -201,10 +201,10 @@ public class CSharpParserTests
             {
                 [DllImport("Rand.dll")]
                 public static extern uint getNextNumber();
-                [DllImport("Licence.dll", EntryPoint = "CheckLic", CharSet = CharSet.Ansi)]
+                [DllImport("Crypto.dll", EntryPoint = "VerifyEx", CharSet = CharSet.Ansi)]
                 internal static extern int Check(string key);
                 [System.Runtime.InteropServices.DllImport(@"kernel32.dll")] static extern int GetTickCount();
-                [DllImport("Licence.dll", EntryPoint = "HashEx", CharSet = CharSet.Ansi)]
+                [DllImport("Crypto.dll", EntryPoint = "HashEx", CharSet = CharSet.Ansi)]
                 [return: MarshalAs(UnmanagedType.AnsiBStr)]
                 private static extern unsafe string Hash([MarshalAs(UnmanagedType.AnsiBStr)] string data, int len);
             }
@@ -215,7 +215,7 @@ public class CSharpParserTests
         Assert.Equal(["New.dll"], c.Refs.Where(r => r.Kind == "native").Select(r => (string)r.X["lib"]!));
         var natives = f.Refs.Where(r => r.Kind == "native").ToList();
         Assert.Contains(natives, r => r is { From: "getNextNumber", FromParent: "Native", Name: "getNextNumber" } && (string)r.X["lib"]! == "Rand.dll");
-        Assert.Contains(natives, r => r is { From: "Check", Name: "CheckLic" } && (string)r.X["lib"]! == "Licence.dll");
+        Assert.Contains(natives, r => r is { From: "Check", Name: "VerifyEx" } && (string)r.X["lib"]! == "Crypto.dll");
         Assert.Contains(natives, r => r is { From: "GetTickCount" } && (string)r.X["lib"]! == "kernel32.dll");
         Assert.Contains(f.Symbols, s => s.Name == "getNextNumber" && s.Parent == "Native");
     }

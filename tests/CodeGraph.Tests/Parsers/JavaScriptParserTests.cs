@@ -173,7 +173,7 @@ public class JavaScriptParserTests
     {
         var f = JavaScriptParser.Parse("src/views/orders.vue", """
             <template>
-              <router-link to="/jackpots">Jackpots</router-link>
+              <router-link to="/invoices">Invoices</router-link>
               <RouterLink :to="{ name: 'orders' }">Orders</RouterLink>
               <router-link :to="item.path">dynamic</router-link>
             </template>
@@ -185,7 +185,7 @@ public class JavaScriptParserTests
             </script>
             """);
         var links = f.Refs.Where(r => r.Kind == "route_link").ToList();
-        Assert.Contains(links, r => r.Name == "jackpots");
+        Assert.Contains(links, r => r.Name == "invoices");
         Assert.Contains(links, r => r.X["route_name"]?.ToString() == "orders");
         Assert.Contains(links, r => r is { Name: "orders/{}/lines", From: "open" });
         Assert.Contains(links, r => r is { Name: "", From: "home" });

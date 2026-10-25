@@ -343,16 +343,16 @@ public class BuilderTests
     public void Impact_on_an_action_includes_the_view_it_renders()
     {
         var g = new Graph();
-        g.Node("db:revenue", ("kind", "db_table"), ("name", "Revenue"));
+        g.Node("db:invoices", ("kind", "db_table"), ("name", "Invoices"));
         g.Node("sym:W:Repo.cs#Repo.Total", ("kind", "method"), ("name", "Total"), ("qual", "Repo.Total"));
         g.Node("sym:W:MainController.cs#MainController.Index", ("kind", "method"), ("name", "Index"), ("qual", "MainController.Index"));
         g.Node("sym:W:Views/Main/Index.cshtml#Index", ("kind", "view"), ("name", "Index"), ("qual", "Main/Index view"));
         g.Node("sym:W:Views/Main/Other.cshtml#Other", ("kind", "view"), ("name", "Other"), ("qual", "Main/Other view"));
-        g.AddEdge("sym:W:Repo.cs#Repo.Total", "db:revenue", "reads");
+        g.AddEdge("sym:W:Repo.cs#Repo.Total", "db:invoices", "reads");
         g.AddEdge("sym:W:MainController.cs#MainController.Index", "sym:W:Repo.cs#Repo.Total", "calls");
         g.AddEdge("sym:W:MainController.cs#MainController.Index", "sym:W:Views/Main/Index.cshtml#Index", "renders");
         var w = new StringWriter { NewLine = "\n" };
-        CodeGraph.Query.GraphQuery.Impact(g, "Revenue", w, depth: 3);
+        CodeGraph.Query.GraphQuery.Impact(g, "Invoices", w, depth: 3);
         Assert.Contains("3 things", w.ToString());   // the repo method, the action, and the page that shows its data
         // a view still affects the action rendering it (the existing direction)
         var w2 = new StringWriter { NewLine = "\n" };
@@ -638,26 +638,26 @@ public class BuilderTests
     [Fact]
     public void A_csharp_http_client_reaches_the_api_action()
     {
-        var api = CodeGraph.Parsers.CSharpParser.Parse("Api/StatsController.cs", """
+        var api = CodeGraph.Parsers.CSharpParser.Parse("Api/SalesController.cs", """
             [Route("api/[controller]")]
-            public class StatsController : Controller
+            public class SalesController : Controller
             {
-                [HttpGet("MonthRevenue/{site}")] public decimal MonthRevenue(int site) => 0;
+                [HttpGet("MonthTotal/{site}")] public decimal MonthTotal(int site) => 0;
             }
             """);
         var client = CodeGraph.Parsers.CSharpParser.Parse("Web/ApiClient.cs", """
             class ApiClient
             {
-                async Task<decimal> GetMonthRevenue(int site)
+                async Task<decimal> GetMonthTotal(int site)
                 {
-                    string query = $"api/Stats/MonthRevenue/{site}";
+                    string query = $"api/Sales/MonthTotal/{site}";
                     var response = await client.GetAsync(query);
                     return 0;
                 }
             }
             """);
-        var g = Build(Cfg("Api", "Web"), Rec("Api/StatsController.cs", api, "Api", "C:/repos/Api"), Rec("Web/ApiClient.cs", client, "Web", "C:/repos/Web"));
-        Assert.True(HasEdge(g, "sym:Web:Web/ApiClient.cs#ApiClient.GetMonthRevenue", "sym:Api:Api/StatsController.cs#StatsController.MonthRevenue", "calls_api"));
+        var g = Build(Cfg("Api", "Web"), Rec("Api/SalesController.cs", api, "Api", "C:/repos/Api"), Rec("Web/ApiClient.cs", client, "Web", "C:/repos/Web"));
+        Assert.True(HasEdge(g, "sym:Web:Web/ApiClient.cs#ApiClient.GetMonthTotal", "sym:Api:Api/SalesController.cs#SalesController.MonthTotal", "calls_api"));
     }
 
     [Fact]

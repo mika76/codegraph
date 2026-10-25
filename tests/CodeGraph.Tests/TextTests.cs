@@ -116,8 +116,8 @@ public class SqlTextTests
     [InlineData("EXEC master.dbo.xp_info", "master.dbo.xp_info")]
     [InlineData("EXEC orders_purge -- nightly", "orders_purge")]
     [InlineData("EXEC GetOrders \nFailed to load orders", "getorders")]  // the next piece of a concatenation
-    [InlineData("Failed to execute telnet command", null)]
-    [InlineData("execute report : ", null)]
+    [InlineData("Failed to execute backup job", null)]
+    [InlineData("execute step : ", null)]
     [InlineData("Execute the command", null)]
     [InlineData("Execute Stored Procedure responsible for it", null)]
     [InlineData("EXEC sp_", null)]                                        // "EXEC sp_" + name

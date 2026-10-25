@@ -53,17 +53,17 @@ public class SqlParserTests
             CREATE PROCEDURE dbo.usp_Close @id int AS
               UPDATE dbo.Orders SET Status = 2 WHERE Id = @id
             GO
-            UPDATE dbo.Patch_Level SET Patch_Date = GETDATE()
+            UPDATE dbo.Schema_Version SET Applied_On = GETDATE()
             go
             CREATE VIEW dbo.v_Open AS SELECT Id FROM dbo.Orders WHERE Status = 1
             """;
         var f = SqlParser.Parse("Patches/Patch12.sql", patch);
         Assert.Contains(f.Refs, r => r is { Kind: "sql", From: "usp_close", Mode: "write", Name: "orders" });
-        Assert.DoesNotContain(f.Refs, r => r.From == "usp_close" && r.Name.Contains("patch_level"));
-        Assert.Contains(f.Refs, r => r is { Kind: "sql", From: null, Mode: "write", Name: "patch_level" });   // the script
-        Assert.Contains(f.Refs, r => r is { Kind: "column", From: null, Mode: "write", Name: "patch_date" });
+        Assert.DoesNotContain(f.Refs, r => r.From == "usp_close" && r.Name.Contains("schema_version"));
+        Assert.Contains(f.Refs, r => r is { Kind: "sql", From: null, Mode: "write", Name: "schema_version" });   // the script
+        Assert.Contains(f.Refs, r => r is { Kind: "column", From: null, Mode: "write", Name: "applied_on" });
         Assert.Contains(f.Refs, r => r is { Kind: "sql", From: "v_open", Name: "orders" });
-        Assert.DoesNotContain(f.Refs, r => r.From == "v_open" && r.Name.Contains("patch_level"));
+        Assert.DoesNotContain(f.Refs, r => r.From == "v_open" && r.Name.Contains("schema_version"));
     }
 
     [Fact]

@@ -129,7 +129,7 @@ public static partial class SqlText
     /// <summary>
     /// Whether "EXEC name" is a call, judged by what follows the name on its line: nothing (the piece ends), ';',
     /// a parameter (@p, a literal, NULL / DEFAULT), a comment or the next statement. Prose like "Failed to execute
-    /// telnet command" or "execute report : x" has an ordinary word or a colon there. A name ending in '_' at the
+    /// backup job" or "execute step : x" has an ordinary word or a colon there. A name ending in '_' at the
     /// end of a piece ("EXEC sp_" + name) is cut off by concatenation.
     /// </summary>
     private static bool ExecCallFollows(string sql, int at, string name)

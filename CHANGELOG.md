@@ -78,8 +78,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   text. MCP `search` reports an unknown `kind` or `repo` as an error with the valid values.
 - 🔄 `codegraph mcp` tells you (once, in its next answer) when `codegraph.exe` was updated after the server started,
   since only a restart loads the new code.
-- 🗣️ Text such as "Failed to execute telnet command" or "Execute the command" no longer counts as a call to a
-  procedure named `telnet` or `the`: `EXEC name` must be followed by nothing, `;`, a parameter, a comment or the
+- 🗣️ Text such as "Failed to execute backup job" or "Execute the command" no longer counts as a call to a
+  procedure named `backup` or `the`: `EXEC name` must be followed by nothing, `;`, a parameter, a comment or the
   next statement. The report's "called but not found" list now shows where each name was first seen.
 - 🧮 Column names are no longer reported as missing procedures because they share a procedure prefix: a string read
   through `Fields("x")`, `Item("x")`, `GetOrdinal("x")`, `Field<T>("x")` or `row["x"]` is a column, and so is a
