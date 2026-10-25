@@ -15,7 +15,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   import), is contained in its parent route and `redirects_to` its redirect. `<router-link to>`, `:to="{ name }"`
   and `router.push` / `replace` / `navigateTo` (`${...}` matched against `:params`) are `links_to` the route -
   "how does the user get to this screen?" and "which screens link here?"; `impact` does not follow links. A lazy
-  `component: () => import(...)` is no longer a function of its own.
+  `component: () => import(...)` is no longer a function of its own. `show` prints a route's name and meta, and
+  `search` finds routes by route name or meta value ("which screens need permission X?").
 - 🧱 **Column-level impact**: every column of a table is a node (`col:orders.total`, shown as `Orders.Total`) linked
   to the procedures, views, triggers, code (inline SQL in VB6, C#, JS/TS, C++, PowerShell), report definitions and
   patch scripts that read it, write it (`UPDATE ... SET`, `INSERT (...)`) or alter it (`ALTER TABLE`, also inside

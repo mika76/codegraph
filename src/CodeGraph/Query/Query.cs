@@ -150,11 +150,16 @@ public static class GraphQuery
             if (!string.IsNullOrEmpty(kind) && !string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)) continue;
             if (!string.IsNullOrEmpty(repo) && !string.Equals(RepoOf(n), repo, StringComparison.OrdinalIgnoreCase)) continue;
             string name = Low(n.Str("name")), qual = Low(n.Str("qual")), path = Low(n.Str("path")), id = n.Id.ToLowerInvariant();
+            // a route is also found by its route name and by its meta values (the permission that guards it)
+            string routeName = Low(n.Str("route_name"));
+            string meta = n.Data["meta"] is JsonObject mo ? string.Join("\n", mo.Select(kv => Low(kv.Value?.ToString()))) : "";
             int tier =
-                name == low || qual == low || path == low || id == low ? 0
+                name == low || qual == low || path == low || id == low || routeName == low ? 0
                 : name.StartsWith(low, StringComparison.Ordinal) ? 1
-                : name.Contains(low, StringComparison.Ordinal) || qual.Contains(low, StringComparison.Ordinal) ? 2
-                : path.Contains(low, StringComparison.Ordinal) || id.Contains(low, StringComparison.Ordinal) ? 3
+                : name.Contains(low, StringComparison.Ordinal) || qual.Contains(low, StringComparison.Ordinal)
+                  || (routeName.Length > 0 && routeName.Contains(low, StringComparison.Ordinal)) ? 2
+                : path.Contains(low, StringComparison.Ordinal) || id.Contains(low, StringComparison.Ordinal)
+                  || (meta.Length > 0 && meta.Contains(low, StringComparison.Ordinal)) ? 3
                 : -1;
             if (tier >= 0) hits.Add((n.Id, tier, Rank(n)));
         }
@@ -174,17 +179,20 @@ public static class GraphQuery
         if (nid is null) return;
         var n = g.GetNode(nid)!;
         w.WriteLine(Label(g, nid) + (ids ? $"  {{{nid}}}" : ""));
-        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "columns", "projects" })
+        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "definition", "columns", "projects", "route_name", "meta" })
         {
             var val = n.Data[k];
             if (!CodeGraph.Knowledge.KnowledgeLoader.Truthy(val)) continue;
-            string text = val is JsonArray arr
-                ? string.Join(", ", arr.Take(30).Select(x =>
+            string text = val switch
+            {
+                JsonArray arr => string.Join(", ", arr.Take(30).Select(x =>
                 {
                     string s = x?.ToString() ?? "";
                     return g.GetNode(s) is { } xn ? xn.Name : s;
-                }))
-                : val!.ToString();
+                })),
+                JsonObject obj => string.Join(", ", obj.Select(kv => $"{kv.Key}={kv.Value}")), // meta: requiresAccess=X
+                _ => val!.ToString(),
+            };
             w.WriteLine($"  {k}: {text}");
         }
         var outg = new Dictionary<string, List<Edge>>();

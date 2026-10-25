@@ -1,3 +1,4 @@
+using System.Text.Json.Nodes;
 using CodeGraph.Query;
 
 namespace CodeGraph.Tests.Output;
@@ -113,6 +114,18 @@ public class QueryTests
         g.Node("db:BorderStyles", ("kind", "db_table"), ("name", "BorderStyles"));
         g.Node("db:OrdersArchive", ("kind", "db_table"), ("name", "OrdersArchive"));
         Assert.Equal(["db:Orders", "db:OrdersArchive", "db:BorderStyles"], GraphQuery.Search(g, "orders"));
+    }
+
+    [Fact]
+    public void Routes_show_name_and_meta_and_are_found_by_them()
+    {
+        var g = SampleGraph.Create();
+        var meta = new JsonObject { ["requiresAuth"] = "true", ["requiresAccess"] = "Mod_Orders" };
+        g.Node("route:Shop:/orders/:id", ("kind", "route"), ("name", "/orders/:id"), ("route_name", "orderDetail"), ("meta", meta));
+        Assert.Contains("  route_name: orderDetail\n  meta: requiresAuth=true, requiresAccess=Mod_Orders\n",
+            Run(w => GraphQuery.Show(g, "route:Shop:/orders/:id", w)));
+        Assert.Equal("route:Shop:/orders/:id", GraphQuery.Search(g, "orderdetail")[0]);   // by route name
+        Assert.Equal(["route:Shop:/orders/:id"], GraphQuery.Search(g, "Mod_Orders"));      // by permission in meta
     }
 
     [Fact]
