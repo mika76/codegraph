@@ -587,14 +587,6 @@ public sealed partial class Builder
         return [];
     }
 
-    /// <summary>
-    /// Whether a bare string literal can stand for a stored procedure: it has a configured prefix, an underscore or
-    /// inner capitals (GetOrders). A plain word ("test", "cleanup") that happens to be a procedure name does not.
-    /// </summary>
-    private bool LooksLikeRoutineName(string name) =>
-        _procPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase))
-        || name.Contains('_')
-        || (name.Skip(1).Any(char.IsUpper) && name.Any(char.IsLower));
 
     private string? DbLookup(string? raw)
     {
@@ -771,7 +763,10 @@ public sealed partial class Builder
             case "literal":
             {
                 string? tgt = DbLookup(name);
-                if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && LooksLikeRoutineName(name))
+                // a bare string is a call only next to database access (DbAccess marks it) or with a configured
+                // prefix (e.g. a constants module naming procedures); otherwise any word could match a procedure
+                bool prefixed = _procPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && (prefixed || rf.Extra?["db"] is not null))
                     return Edge(caller, tgt, "executes", lineAttr, ("via", "name in string"));
                 if (tgt is null && _procPrefixes.Any(p => name.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
                     Inc(_unresolved, "exec:" + name);

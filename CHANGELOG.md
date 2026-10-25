@@ -28,9 +28,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
-- 🎯 A plain word in a string (`"test"`, `"cleanup"`) no longer links to a stored procedure that happens to have
-  that name. A bare string now needs a configured `proc_prefixes` prefix, an underscore or inner capitals
-  (`GetOrders`) to count as a procedure call.
+- 🎯 A string that only names a stored procedure (`"GetOrders"`, `"cleanup"`) counts as a call only where the
+  surrounding routine uses a database API - ADO, ADO.NET, ODBC, EF raw SQL, `sqlcmd`/`Invoke-Sqlcmd`, node
+  `mssql`/`oracledb` - or when it has one of your `proc_prefixes`. A word like `"test"` in UI code no longer links
+  to a procedure that happens to share its name. Works for any naming style.
 - 🏷️ A module that both a release branch and `releases.json` put in the same release is counted once (it showed
   as `x2`). A version from `releases.json` replaces the project version taken from the branch.
 - 🔓 `publish.ps1` no longer fails while `codegraph mcp` is running: the locked exe is renamed to

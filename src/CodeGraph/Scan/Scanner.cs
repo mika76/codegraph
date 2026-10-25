@@ -24,7 +24,7 @@ public sealed record ParseError(string Repo, string Rel, string Message);
 public static class Scanner
 {
     /// <summary>Bump whenever a parser's output changes, otherwise the stale cache is used.</summary>
-    public const int ParserVersion = 6;
+    public const int ParserVersion = 7;
 
     public const string CacheFileName = "cache.json";
 
@@ -93,6 +93,7 @@ public static class Scanner
             if (extractor is not null) return ExtractorParser.Parse(rel, text, extractor);
             var facts = ParserRegistry.For(Path.GetFileName(absPath))!(rel, text);
             CodeStrings.Add(Path.GetFileName(absPath), text, facts);
+            DbAccess.Mark(Path.GetFileName(absPath), text, facts);
             return facts;
         }
         catch (Exception ex) // keep going on odd files
