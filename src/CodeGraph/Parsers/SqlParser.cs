@@ -21,6 +21,24 @@ public static partial class SqlParser
     private static partial Regex TriggerOnRe();
     [GeneratedRegex(@"^\s*,?\s*\[?([A-Za-z_][\w ]*?)\]?\s+\[?(\w+)\]?\s*(\([^)]*\))?", Ic | RegexOptions.Multiline)]
     private static partial Regex ColumnRe();
+
+    /// <summary>The parts of a list split at commas outside brackets: "a int, b decimal(10, 2)" -> 2 parts.</summary>
+    private static IEnumerable<string> TopLevelParts(string list)
+    {
+        int depth = 0, start = 0;
+        for (int i = 0; i < list.Length; i++)
+        {
+            char c = list[i];
+            if (c == '(') depth++;
+            else if (c == ')') depth--;
+            else if (c == ',' && depth == 0)
+            {
+                yield return list[start..i];
+                start = i + 1;
+            }
+        }
+        if (start < list.Length) yield return list[start..];
+    }
     [GeneratedRegex(@"\bfor\s+" + NameRx, Ic)]
     private static partial Regex SynonymForRe();
     [GeneratedRegex(@"\s*\.\s*", RegexOptions.CultureInvariant)]
@@ -119,8 +137,11 @@ public static partial class SqlParser
                     }
                     var cols = new JsonArray();
                     int count = 0;
-                    foreach (Match cm in ColumnRe().Matches(body[(paren + 1)..Math.Min(j, body.Length)]))
+                    // one definition per top-level comma, whether written one per line or all on one line
+                    foreach (string part in TopLevelParts(body[(paren + 1)..Math.Min(j, body.Length)]))
                     {
+                        var cm = ColumnRe().Match(part);
+                        if (!cm.Success) continue;
                         string cname = cm.Groups[1].Value.Trim();
                         if (NotColumns.Contains(cname.ToLowerInvariant())) continue;
                         if (count++ >= 300) break;
@@ -150,6 +171,7 @@ public static partial class SqlParser
                     if (k2.Item2 != key && seen.Add(k2))
                         refs.Add(MakeRef(key, "sql", k2.Item2, line, mode));
                 }
+                refs.AddRange(SqlText.ColumnRefs(body, key, null, o => li.Line(bodyStart + o)));
                 string dyn = StringsIn(m.Index, end);
                 if (SqlText.LooksLikeSql(dyn))
                 {
@@ -189,11 +211,16 @@ public static partial class SqlParser
         foreach (var (a, b) in claimed)
             for (int k = a; k < b && k < rest.Length; k++) rest[k] = ' ';
         var seenRest = new HashSet<(string, string)>();
-        foreach (var (mode, nm) in Sorted(SqlText.Refs(rest.ToString())))
+        string restText = rest.ToString();
+        foreach (var (mode, nm) in Sorted(SqlText.Refs(restText)))
         {
             var k2 = (mode, ObjectKey(nm));
             if (seenRest.Add(k2)) refs.Add(MakeRef(null, "sql", k2.Item2, 1, mode));
         }
+        // an ALTER TABLE of a table defined in this file is part of its definition, as above
+        refs.AddRange(SqlText.ColumnRefs(restText, null, null, o => li.Line(o)).Where(r =>
+            r.Mode != "alter" || r.Extra?["tables"] is not System.Text.Json.Nodes.JsonArray { Count: 1 } t
+            || !defined.Contains(ObjectKey(t[0]?.ToString() ?? ""))));
 
         return new FileFacts { Lang = "sql", Symbols = symbols, Refs = refs, Loc = SourceText.CountLines(text) };
     }

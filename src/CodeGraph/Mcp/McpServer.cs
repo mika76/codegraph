@@ -145,7 +145,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             {
                 ["query"] = Str("Text to look for, e.g. a table, routine, file, project or route name."),
                 ["kind"] = Str("Only this node kind, e.g. project, file, class, method, sub, function, form, " +
-                               "db_table, db_proc, db_view, installer, release, or a kind from your own file " +
+                               "db_table, db_proc, db_view, column, installer, release, or a kind from your own file " +
                                "formats (e.g. report). An unknown kind lists the kinds in the graph."),
                 ["repo"] = Str("Only nodes from this repository."),
                 ["limit"] = Int("Most results to return.", 25),

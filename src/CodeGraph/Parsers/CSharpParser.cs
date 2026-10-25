@@ -380,8 +380,11 @@ public static partial class CSharpParser
                 symbols.Add(cs);
                 string sql = string.Join(SqlText.PieceSeparator, Scrub.CLike(raw).Strings.Select(s => s.Value));
                 if (SqlText.LooksLikeSql(sql))
+                {
                     foreach (var (mode, nm) in SqlText.Refs(sql).OrderBy(f => f.Mode, StringComparer.Ordinal).ThenBy(f => f.Name, StringComparer.Ordinal))
                         refs.Add(new Ref { From = cs.Name, FromParent = t.Qual, Kind = "sql", Mode = mode, Name = nm, Line = cs.Line });
+                    refs.AddRange(SqlText.ColumnRefs(sql, cs.Name, t.Qual, _ => cs.Line));
+                }
             }
         }
 
@@ -510,8 +513,11 @@ public static partial class CSharpParser
             string joined = string.Join(SqlText.PieceSeparator, items.Select(i => i.Value));
             int line = li.Line(items[0].Offset);
             if (SqlText.LooksLikeSql(joined))
+            {
                 foreach (var (mode, nm) in SqlText.Refs(joined).OrderBy(r => r.Mode, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal))
                     refs.Add(new Ref { From = owner, FromParent = parent, Kind = "sql", Mode = mode, Name = nm, Line = line });
+                refs.AddRange(SqlText.ColumnRefs(joined, owner, parent, _ => line));
+            }
             foreach (var it in items)
             {
                 string? lit = SqlText.LiteralIdentifier(it.Value);

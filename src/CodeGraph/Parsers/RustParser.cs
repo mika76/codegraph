@@ -394,6 +394,8 @@ public static partial class RustParser
         foreach (var sl in strings)
         {
             if (!SqlText.LooksLikeSql(sl.Value)) continue;
+            var owner = OwnerOf(sl.Offset);
+            refs.AddRange(SqlText.ColumnRefs(sl.Value, owner?.Name, owner?.Parent, _ => li.Line(sl.Offset)));
             foreach (var (mode, nm) in SqlText.Refs(sl.Value).OrderBy(r => r.Mode, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal))
             {
                 var o = OwnerOf(sl.Offset);

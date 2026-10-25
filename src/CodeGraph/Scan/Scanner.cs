@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -24,7 +24,7 @@ public sealed record ParseError(string Repo, string Rel, string Message);
 public static class Scanner
 {
     /// <summary>Bump whenever a parser's output changes, otherwise the stale cache is used.</summary>
-    public const int ParserVersion = 18;
+    public const int ParserVersion = 20;
 
     public const string CacheFileName = "cache.json";
 

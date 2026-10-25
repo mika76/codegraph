@@ -82,6 +82,19 @@ public class SqlTextTests
     }
 
     [Fact]
+    public void Comma_joins_read_every_table()
+    {
+        var refs = SqlText.Refs("select o.Id, l.Qty from Orders o, dbo.Lines l, Items where o.Id = l.OrderId");
+        Assert.Contains(("read", "orders"), refs);
+        Assert.Contains(("read", "dbo.lines"), refs);
+        Assert.Contains(("read", "items"), refs);
+        Assert.DoesNotContain(refs, r => r.Name == "where");
+        var cols = SqlText.Columns("select o.Total, l.Qty from Orders o, Lines l");
+        Assert.Equal("orders", cols.Single(c => c.Name == "total").Table);
+        Assert.Equal("lines", cols.Single(c => c.Name == "qty").Table);
+    }
+
+    [Fact]
     public void Delete_from_is_not_also_a_read()
     {
         var refs = SqlText.Refs("delete from Orders where id = 1");
@@ -110,6 +123,43 @@ public class SqlTextTests
     [InlineData("EXEC sp_", null)]                                        // "EXEC sp_" + name
     public void Exec_needs_a_call_shape(string sql, string? proc) =>
         Assert.Equal(proc, SqlText.Refs(sql).Where(r => r.Mode == "exec").Select(r => r.Name).SingleOrDefault());
+
+    private static string Uses(string sql) => string.Join(" ", SqlText.Columns(sql)
+        .Select(c => $"{c.Mode}:{(c.Table is null ? "?" : c.Table)}.{c.Name}").Order(StringComparer.Ordinal));
+
+    [Fact]
+    public void Columns_with_aliases_and_modes()
+    {
+        Assert.Equal("read:?.status read:?.total read:dbo.orders.id",
+            Uses("select o.Id, Total from dbo.Orders o where Status = @s"));
+        Assert.Equal("read:?.id read:?.status write:orders.status write:orders.total",
+            Uses("UPDATE Orders SET Total = 0, Orders.Status = Status + 1 WHERE Id = @id"));
+        Assert.Equal("write:orders.id write:orders.total",
+            Uses("insert into Orders (Id, Total) values (@id, @t)"));
+        // two statements: each column belongs to its own statement's tables
+        var two = SqlText.Columns("SELECT Total FROM Orders; DELETE FROM Lines WHERE LineNo = 1");
+        Assert.Equal(["orders"], two.Single(c => c.Name == "total").Tables);
+        Assert.Equal(["lines"], two.Single(c => c.Name == "lineno").Tables);
+        // CASE ... END does not end the statement
+        Assert.Equal(["orders"], SqlText.Columns("select case when Paid = 1 then 'y' end as x, Total from Orders")
+            .Single(c => c.Name == "total").Tables);
+    }
+
+    [Fact]
+    public void Columns_in_definitions_and_alter_table()
+    {
+        Assert.Empty(SqlText.Columns("CREATE TABLE Orders (Id int, Total money)"));
+        var altered = SqlText.Columns("ALTER TABLE dbo.Orders ALTER COLUMN Total decimal(10,2) NOT NULL").Single(c => c.Name == "total");
+        Assert.Equal("alter", altered.Mode);
+        Assert.Equal("dbo.orders", altered.Table);
+        // the usual patch shape: guarded by IF NOT EXISTS
+        var guarded = SqlText.Columns("IF NOT EXISTS (SELECT * FROM syscolumns WHERE name = 'Paid') ALTER TABLE Orders ADD Paid bit NULL");
+        Assert.Equal(("alter", "orders"), guarded.Where(c => c.Name == "paid").Select(c => (c.Mode, c.Table)).Single());
+        // a procedure header names parameters, not columns; its body does
+        var proc = SqlText.Columns("CREATE PROCEDURE p @Total int AS BEGIN SELECT Total FROM Orders END");
+        Assert.Equal("read", proc.Single(c => c.Name == "total").Mode);
+        Assert.DoesNotContain(proc, c => c.Name == "p");
+    }
 
     [Fact]
     public void Function_calls_under_any_schema()

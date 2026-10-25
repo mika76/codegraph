@@ -683,6 +683,7 @@ public static partial class JavaScriptParser
             // Python iterates a set (arbitrary order); sort for determinism.
             foreach (var (mode, nm) in SqlText.Refs(joined).OrderBy(x => x.Name, StringComparer.Ordinal).ThenBy(x => x.Mode, StringComparer.Ordinal))
                 refs.Add(new Ref { From = null, Kind = "sql", Mode = mode, Name = nm, Line = 1 });
+            refs.AddRange(SqlText.ColumnRefs(joined, null, null, _ => 1));
         }
         foreach (var s in strings)
         {

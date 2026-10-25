@@ -519,6 +519,7 @@ public static partial class Vb6Parser
                     if (rsWrite && mode == "read")
                         refs.Add(new Ref { From = owner, FromParent = parent, Kind = "sql", Mode = "write", Name = nm, Line = items[0].Line, Via = "recordset" });
                 }
+                refs.AddRange(SqlText.ColumnRefs(joined, owner, parent, _ => items[0].Line));
             }
             foreach (var (line, s) in items)
             {

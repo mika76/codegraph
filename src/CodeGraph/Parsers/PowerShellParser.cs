@@ -99,8 +99,11 @@ public static partial class PowerShellParser
             var items = byOwner[o ?? "\0"];
             string joined = string.Join(SqlText.PieceSeparator, items.Select(i => i.Value));
             if (SqlText.LooksLikeSql(joined))
+            {
                 foreach (var (mode, nm) in SqlRefsSorted(joined))
                     facts.Refs.Add(new Ref { From = o, Kind = "sql", Mode = mode, Name = nm, Line = li.Line(items[0].Offset) });
+                facts.Refs.AddRange(SqlText.ColumnRefs(joined, o, null, _ => li.Line(items[0].Offset)));
+            }
             foreach (var it in items)
             {
                 string? lit = SqlText.LiteralIdentifier(it.Value);
@@ -129,8 +132,11 @@ public static partial class PowerShellParser
         foreach (var name in Mentions(text))
             facts.Refs.Add(new Ref { From = null, Kind = "mention", Name = name, Line = 1 });
         if (SqlText.LooksLikeSql(text))
+        {
             foreach (var (mode, nm) in SqlRefsSorted(text))
                 facts.Refs.Add(new Ref { From = null, Kind = "sql", Mode = mode, Name = nm, Line = 1 });
+            facts.Refs.AddRange(SqlText.ColumnRefs(text, null, null, _ => 1));
+        }
         facts.Loc = SourceText.CountLines(text);
         return facts;
     }

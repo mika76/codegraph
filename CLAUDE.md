@@ -47,7 +47,10 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   routine's string pieces with `SqlText.PieceSeparator`). Identifier-like strings become `literal` refs;
   `Scan/DbAccess` marks them `X["db"]` when the enclosing routine uses a data-access API (library names only) and
   `X["column"]` when they read a column (`Fields("x")`, `row["x"]`, passed with a DataRow/reader). The builder links
-  a literal to a proc only if marked db or it has a `proc_prefixes` prefix.
+  a literal to a proc only if marked db or it has a `proc_prefixes` prefix. `SqlText.Columns` (Text/SqlColumns.cs)
+  splits SQL into statements and yields column candidates (qualified via aliases, read / write in UPDATE SET and
+  INSERT lists / alter after ALTER TABLE); every SQL site emits them as `column` refs (`SqlText.ColumnRefs`), and the
+  builder links them to `col:` nodes only when the qualified table or exactly one statement table has the column.
   **No naming conventions**: never decide by casing, underscores or name shape of the user's code - use language
   keywords, library/framework APIs and structure. Guesses are "candidates" (`literal`, SQL `x.y(`, endpoints with
   `X["candidate"]`, lower-case TS types): they link only when they resolve, never count as unresolved.
@@ -76,7 +79,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   stdout is protocol only - log to stderr.
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
-`db:<object>`, `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
+`db:<object>`, `col:<table>.<column>` (kind `column`), `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
 uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, uses_value, reads, writes,
 executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in.
 

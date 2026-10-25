@@ -138,8 +138,8 @@ It has three parts:
 
 - **Node ids**: `repo:<name>`, `area:<repo>:<top folder>`, `proj:<repo>:<project file>`, `sln:<repo>:<file>`,
   `file:<repo>:<path>`, `sym:<repo>:<path>#<Type>.<Member>`, `db:<object>` (lower case, without `dbo.`),
-  `ext:<library>`, `rel:<version>`, `concept:<name>`, `item:<kind>:<name>` and `fileref:<name>` (your own file
-  formats).
+  `ext:<library>`, `rel:<version>`, `concept:<name>`, `col:<table>.<column>` (lower case, kind `column`, named
+  `Table.Column`), `item:<kind>:<name>` and `fileref:<name>` (your own file formats).
 - **Meta**: `stats` (counts, `refs_total` / `refs_resolved`), `unresolved` (names that matched nothing, by kind:
   `exec:<proc>`, `db:<object>`, `api:<VERB /route>`, ...) and `unresolved_at` (where each missing procedure was first
   called, `Repo: path:line`).

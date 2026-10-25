@@ -60,10 +60,10 @@ public static class Report
             $"- Source files: {langs.Sum(x => x.Count)}  |  nodes: {nodes.Count}  |  edges: {g.Edges.Count}",
             $"- References resolved: {Fmt(res)} of {Fmt(tot)} ({pct.ToString("F1", CultureInfo.InvariantCulture)}%) - the rest are mostly " +
             "framework/library calls and local variables that have no target in the scanned code",
-            "",
-            "**Files per language**",
-            "",
         };
+        if (stats.GetValueOrDefault("column_uses") is > 0 and var cu)
+            lines.Add($"- Column uses linked: {Fmt(cu)} (procedures, views, code and reports reading or writing a table column)");
+        lines.AddRange(["", "**Files per language**", ""]);
         lines.AddRange(Table(["Language", "Files"], Rows(langs, x => [x.Name, x.Count])));
         lines.AddRange(["**Nodes per kind**", ""]);
         lines.AddRange(Table(["Kind", "Count"], Rows(kinds.MostCommon(), kv => [kv.Key, kv.Value])));

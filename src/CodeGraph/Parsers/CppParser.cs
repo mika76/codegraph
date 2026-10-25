@@ -254,8 +254,11 @@ public static partial class CppParser
         }
         string joined = string.Join(SqlText.PieceSeparator, strings.Select(x => x.Value));
         if (SqlText.LooksLikeSql(joined))
+        {
             foreach (var (mode, nm) in SqlText.Refs(joined).OrderBy(r => r.Mode, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal))
                 refs.Add(new Ref { From = null, Kind = "sql", Mode = mode, Name = nm, Line = 1 });
+            refs.AddRange(SqlText.ColumnRefs(joined, null, null, _ => 1));
+        }
         foreach (var str in strings)
         {
             string? lit = SqlText.LiteralIdentifier(str.Value);

@@ -457,6 +457,79 @@ public class BuilderTests
         Assert.Contains("1 thing", w.ToString());
     }
 
+    [Fact]
+    public void Columns_are_linked_to_the_procs_views_code_and_patches_that_use_them()
+    {
+        static FileFacts Sql(string rel, string text) => CodeGraph.Parsers.SqlParser.Parse(rel, text);
+        var orders = Sql("Db/Tables/dbo.Orders.sql", "CREATE TABLE dbo.Orders (Id int NOT NULL, Total money NULL, Status int NULL)");
+        var lines = Sql("Db/Tables/dbo.Lines.sql", "CREATE TABLE dbo.Lines (Id int NOT NULL, OrderId int NOT NULL, Qty int NULL)");
+        var proc = Sql("Db/Procs/dbo.usp_Close.sql", """
+            CREATE PROCEDURE dbo.usp_Close @id int AS
+            BEGIN
+              UPDATE dbo.Orders SET Status = 2 WHERE Id = @id
+              SELECT Qty FROM dbo.Lines WHERE OrderId = @id
+            END
+            """);
+        var view = Sql("Db/Views/dbo.v_Open.sql", """
+            CREATE VIEW dbo.v_Open AS
+            SELECT o.Total, l.Qty, Id FROM dbo.Orders o JOIN dbo.Lines l ON l.OrderId = o.Id
+            """);
+        var patch = Sql("Db/Patches/Patch12.sql", "ALTER TABLE dbo.Orders ALTER COLUMN Total decimal(10, 2) NOT NULL\nGO\n");
+        var repo = CodeGraph.Parsers.CSharpParser.Parse("Svc/OrderRepo.cs", """
+            class OrderRepo
+            {
+                decimal Total(int id) => conn.QuerySingle<decimal>("SELECT Total FROM Orders WHERE Id = @id", new { id });
+            }
+            """);
+        var form = CodeGraph.Parsers.Vb6Parser.Parse("App/frmOrder.frm", """
+            VERSION 5.00
+            Begin VB.Form frmOrder
+            End
+            Attribute VB_Name = "frmOrder"
+            Private Sub Form_Load()
+                Set rs = cn.Execute("SELECT Status FROM Orders WHERE Id = " & mId)
+            End Sub
+            """);
+        var g = Build(Cfg("Shop"), Rec("Db/Tables/dbo.Orders.sql", orders), Rec("Db/Tables/dbo.Lines.sql", lines),
+            Rec("Db/Procs/dbo.usp_Close.sql", proc), Rec("Db/Views/dbo.v_Open.sql", view), Rec("Db/Patches/Patch12.sql", patch),
+            Rec("Svc/OrderRepo.cs", repo), Rec("App/frmOrder.frm", form));
+
+        Assert.Equal("Orders.Total", g.GetNode("col:orders.total")!.Name);
+        Assert.True(HasEdge(g, "db:orders", "col:orders.total", "contains"));
+        Assert.True(HasEdge(g, "db:usp_close", "col:orders.status", "writes"));
+        Assert.True(HasEdge(g, "db:usp_close", "col:lines.qty", "reads"));
+        Assert.True(HasEdge(g, "db:v_open", "col:orders.total", "reads"));
+        Assert.True(HasEdge(g, "db:v_open", "col:lines.orderid", "reads"));
+        Assert.True(HasEdge(g, "db:v_open", "col:orders.id", "reads")); // o.Id is qualified
+        Assert.True(HasEdge(g, "sym:Shop:Svc/OrderRepo.cs#OrderRepo.Total", "col:orders.total", "reads"));
+        Assert.True(HasEdge(g, "sym:Shop:App/frmOrder.frm#frmOrder.Form_Load", "col:orders.status", "reads"));
+        Assert.True(HasEdge(g, "file:Shop:Db/Patches/Patch12.sql", "col:orders.total", "alters"));
+        Assert.DoesNotContain(g.Edges, e => e.Source == "db:orders" && e.Target.StartsWith("col:", StringComparison.Ordinal) && e.Relation != "contains");
+
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "Orders.Total", w, depth: 1);
+        string impact = w.ToString();
+        Assert.Contains("v_Open", impact);
+        Assert.Contains("Svc/OrderRepo.cs", impact);
+        Assert.Contains("Patch12.sql", impact);
+        Assert.DoesNotContain("usp_Close", impact); // it writes Status, not Total
+    }
+
+    [Fact]
+    public void An_unqualified_column_in_two_joined_tables_is_not_guessed()
+    {
+        var orders = CodeGraph.Parsers.SqlParser.Parse("Orders.sql", "CREATE TABLE Orders (Id int, Total money)");
+        var lines = CodeGraph.Parsers.SqlParser.Parse("Lines.sql", "CREATE TABLE Lines (Id int, Qty int)");
+        var view = CodeGraph.Parsers.SqlParser.Parse("v.sql", "CREATE VIEW v AS SELECT Id, Qty FROM Orders o JOIN Lines l ON l.Id = o.Id");
+        var g = Build(Cfg("Shop"), Rec("Orders.sql", orders), Rec("Lines.sql", lines), Rec("v.sql", view));
+        Assert.True(HasEdge(g, "db:v", "col:lines.qty", "reads"));     // only Lines has Qty
+        Assert.True(HasEdge(g, "db:v", "col:orders.id", "reads"));     // o.Id is qualified
+        Assert.True(HasEdge(g, "db:v", "col:lines.id", "reads"));      // l.Id is qualified
+        var bare = CodeGraph.Parsers.SqlParser.Parse("w.sql", "CREATE VIEW w AS SELECT Id FROM Orders, Lines");
+        var g2 = Build(Cfg("Shop"), Rec("Orders.sql", orders), Rec("Lines.sql", lines), Rec("w.sql", bare));
+        Assert.DoesNotContain(g2.Edges, e => e.Source == "db:w" && e.Target.EndsWith(".id", StringComparison.Ordinal));
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

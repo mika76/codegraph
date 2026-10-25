@@ -10,6 +10,12 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 ## [Unreleased]
 
 ### ✨ Added
+- 🧱 **Column-level impact**: every column of a table is a node (`col:orders.total`, shown as `Orders.Total`) linked
+  to the procedures, views, triggers, code (inline SQL in VB6, C#, JS/TS, C++, PowerShell), report definitions and
+  patch scripts that read it, write it (`UPDATE ... SET`, `INSERT (...)`) or alter it (`ALTER TABLE`, also inside
+  `IF NOT EXISTS`). `impact Orders.Total` answers "what breaks if I rename or change this column?". A name is
+  linked only when it is qualified with a table or alias of its statement, or exactly one table of the statement has
+  that column - never guessed. The report shows how many column uses were linked.
 - 🤖 **MCP server**: `codegraph mcp` serves the graph to AI assistants (Claude Code, Cursor, VS Code, ...) over
   stdio, with read-only tools `search`, `show` (filter by relation and direction), `impact`, `path`, `source`
   (a definition's code with line numbers) and `report`. Results carry node ids. An ambiguous name returns its
@@ -36,6 +42,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🗃️ Old-style comma joins (`FROM Orders o, Lines l`) read every listed table, not just the first, and a
+  `CREATE TABLE` written on one line keeps all its columns.
 - 🧪 .NET test projects (referencing xUnit, NUnit, MSTest or `Microsoft.NET.Test.Sdk`) are marked `test` and are not
   counted as part of a release taken from the branch name.
 - 🔗 A .NET reference is only linked to a project that can produce it: `<Reference Include="System" />` (a framework

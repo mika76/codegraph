@@ -84,6 +84,9 @@ public static partial class SqlText
                 }
         foreach (Match m in FuncCall().Matches(sql))
             found.Add(("call", NormName(m.Groups[1].Value)));
+        // old-style joins: FROM Orders o, Lines l - the tables after the first
+        foreach (var (name, _, _) in FromListTables(sql).Where(t => t.Index > 0))
+            found.Add(("read", name));
         // DELETE FROM x also matched the read FROM pattern -> drop the duplicate read
         var writes = found.Where(f => f.Item1 == "write").Select(f => f.Item2).ToHashSet();
         if (found.Any(f => f.Item1 == "read" && writes.Contains(f.Item2)))

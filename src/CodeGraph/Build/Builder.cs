@@ -701,8 +701,34 @@ public sealed partial class Builder
 
     // ================================================================== references
 
+    /// <summary>Table / view node id -> column name (lower case) -> column node id.</summary>
+    private readonly Dictionary<string, Dictionary<string, string>> _columns = [];
+
+    /// <summary>A node per column of each table / view with known columns: col:&lt;table&gt;.&lt;column&gt;.</summary>
+    private void ColumnNodes()
+    {
+        foreach (var n in _g.Nodes.Where(n => n.Kind is "db_table" or "db_view" && n.Data["columns"] is JsonArray).ToList())
+        {
+            var cols = new Dictionary<string, string>();
+            foreach (var c in (JsonArray)n.Data["columns"]!)
+            {
+                string def = (c?.ToString() ?? "").Trim();
+                string col = def.Split((char[]?)null, 2)[0].Trim('[', ']');
+                string key = col.ToLowerInvariant();
+                if (col.Length == 0 || cols.ContainsKey(key)) continue;
+                string cid = $"col:{n.Id[3..]}.{key}";
+                _g.Node(cid, ("kind", "column"), ("name", $"{n.Name}.{col}"), ("table", n.Id), ("definition", def),
+                    ("repo", n.Str("repo")), ("file", n.Str("file")), ("line", n.Data["line"]?.DeepClone()));
+                _g.AddEdge(n.Id, cid, "contains");
+                cols[key] = cid;
+            }
+            _columns[n.Id] = cols;
+        }
+    }
+
     private void ResolveRefs()
     {
+        ColumnNodes();
         JsImports();
         ViewLinks();
         foreach (var r in _records)
@@ -735,6 +761,12 @@ public sealed partial class Builder
                     caller = c ?? fid;
                 }
                 bool resolved = ResolveOne(fam, fid, caller, rf);
+                if (rf.Kind == "column")
+                {
+                    // column uses are counted on their own: they would swamp the reference rate
+                    if (resolved) Inc(_stats, "column_uses");
+                    continue;
+                }
                 if (!candidate || resolved) Inc(_stats, "refs_total");
                 if (resolved) Inc(_stats, "refs_resolved");
             }
@@ -826,6 +858,17 @@ public sealed partial class Builder
                 };
                 if (rel is null) return false;
                 return Edge(caller, tgt, rel, lineAttr, ("dynamic", rf.Extra?["dynamic"]), ("via", rf.Via));
+            }
+            case "column":
+            {
+                // the qualified table's column, or the one statement table that has such a column - never a guess
+                var tableKeys = XStr(rf.Extra, "table") is { } qualified ? [qualified]
+                    : (rf.Extra?["tables"] as JsonArray)?.Select(x => x?.ToString() ?? "").ToList() ?? [];
+                var tables = tableKeys.Select(DbLookup).OfType<string>().Distinct()
+                    .Where(t => _columns.GetValueOrDefault(t)?.ContainsKey(name) == true).ToList();
+                if (tables.Count != 1 || tables[0] == caller) return false;
+                string rel = rf.Mode switch { "write" => "writes", "alter" => "alters", _ => "reads" };
+                return Edge(caller, _columns[tables[0]][name], rel, lineAttr);
             }
             case "literal":
             {

@@ -241,6 +241,9 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
   uses a database API - ADO, ADO.NET, Entity Framework, ODBC, `sqlcmd` - or the name has one of your
   `proc_prefixes`; column names like `rs.Fields("x")` are not calls), ADO recordsets that `.Update`/`.AddNew`
 - stored procedure / view / function / trigger → the tables they read, write and execute; table → table foreign keys
+- columns: every column of a table is a node (`Orders.Total`) linked to the procedures, views, code, reports and
+  patch scripts that read, write or alter it - `impact Orders.Total` before renaming or changing a column. A name is
+  linked when it is qualified (`o.Total`) or only one table of the statement has such a column; never guessed.
 - VB6 `Declare ... Lib "X.dll"` → the function in your own X.dll project
 - TS/JS/Vue: imports (relative, `@/`, tsconfig `paths`, lazy `import()`, re-exports), calls through imports,
   components used in `<template>`, imports of your own npm packages into their source
