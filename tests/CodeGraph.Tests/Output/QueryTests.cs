@@ -170,6 +170,80 @@ public class QueryTests
         var g = SampleGraph.Create();
         var back = Run(w => GraphQuery.Path(g, "usp_Save", "modDb.Load", w));
         Assert.Contains("<--executes-- modDb.Load (function)", back);
-        Assert.Equal("No connection found.\n", Run(w => GraphQuery.Path(g, "Unused", "frmMain.Save", w)));
+        Assert.Equal("No connection found within 8 steps.\n", Run(w => GraphQuery.Path(g, "Unused", "frmMain.Save", w)));
+    }
+
+    /// <summary>a.ts -> m1 -> m2 -> b.ts one way; a.ts and b.ts also both import lib (a shorter "valley").</summary>
+    private static Model.Graph PathGraph()
+    {
+        var g = new Model.Graph();
+        foreach (var n in new[] { "a", "m1", "m2", "b", "lib", "c" })
+            g.Node($"file:R:{n}.ts", ("kind", "file"), ("name", $"{n}.ts"), ("path", $"{n}.ts"));
+        g.Node("repo:R", ("kind", "repo"), ("name", "R"));
+        g.Node("rel:1.0", ("kind", "release"), ("name", "1.0"));
+        g.Node("proj:R:p", ("kind", "project"), ("name", "p"));
+        g.AddEdge("file:R:a.ts", "file:R:m1.ts", "imports");
+        g.AddEdge("file:R:m1.ts", "file:R:m2.ts", "imports");
+        g.AddEdge("file:R:m2.ts", "file:R:b.ts", "imports");
+        g.AddEdge("file:R:a.ts", "file:R:lib.ts", "imports");
+        g.AddEdge("file:R:b.ts", "file:R:lib.ts", "imports");
+        g.AddEdge("file:R:c.ts", "file:R:lib.ts", "imports");
+        g.AddEdge("repo:R", "file:R:a.ts", "contains");
+        g.AddEdge("repo:R", "file:R:c.ts", "contains");
+        g.AddEdge("proj:R:p", "rel:1.0", "released_in");
+        g.AddEdge("proj:R:p", "file:R:lib.ts", "uses_library");
+        return g;
+    }
+
+    [Fact]
+    public void Path_prefers_one_way_chains_over_shorter_valleys()
+    {
+        var g = PathGraph();
+        Assert.Equal(
+            "a.ts (file)  [a.ts]\n  --imports--> m1.ts (file)  [m1.ts]\n  --imports--> m2.ts (file)  [m2.ts]\n" +
+            "  --imports--> b.ts (file)  [b.ts]\n", Run(w => GraphQuery.Path(g, "a.ts", "b.ts", w)));
+        Assert.StartsWith("b.ts (file)  [b.ts]\n  <--imports-- m2.ts", Run(w => GraphQuery.Path(g, "b.ts", "a.ts", w)));
+    }
+
+    [Fact]
+    public void Path_marks_mixed_chains_and_skips_repo_membership()
+    {
+        var g = PathGraph();
+        var text = Run(w => GraphQuery.Path(g, "c.ts", "a.ts", w, ids: true));
+        Assert.Equal(
+            "c.ts (file)  [c.ts]  {file:R:c.ts}\n" +
+            "  --imports--> lib.ts (file)  [lib.ts]  {file:R:lib.ts}\n" +
+            "  <--imports-- a.ts (file)  [a.ts]  {file:R:a.ts}\n" +
+            "(No one-way chain: this path changes direction, e.g. both ends use the same thing or are used by the " +
+            "same thing, so it may not be a real dependency.)\n", text);
+        // released_in and uses_library are followed too
+        Assert.Contains("<--released_in-- p (project)\n  --uses_library--> lib.ts", Run(w => GraphQuery.Path(g, "1.0", "lib.ts", w)));
+    }
+
+    [Fact]
+    public void Path_respects_max_length()
+    {
+        var g = PathGraph();
+        Assert.Equal("No connection found within 2 steps.\n", Run(w => GraphQuery.Path(g, "m1.ts", "c.ts", w, maxLen: 2)));
+        Assert.Contains("--imports--> lib.ts", Run(w => GraphQuery.Path(g, "m1.ts", "c.ts", w, maxLen: 4)));
+    }
+
+    [Fact]
+    public void Impact_groups_items_by_kind_and_lists_shared_files_once()
+    {
+        var g = SampleGraph.Create();
+        foreach (var p in new[] { "P2", "P3" })
+        {
+            g.Node($"proj:Shop:{p}", ("kind", "project"), ("name", p));
+            ((System.Text.Json.Nodes.JsonArray)g.GetNode(SampleGraph.FDb)!["projects"]!).Add((System.Text.Json.Nodes.JsonNode?)$"proj:Shop:{p}");
+        }
+        g.Node("item:report:sales", ("kind", "report"), ("name", "Sales Summary"), ("file", SampleGraph.FMain));
+        g.AddEdge("item:report:sales", "db:Orders", "reads");
+        var text = Run(w => GraphQuery.Impact(g, "Orders", w, depth: 2));
+        Assert.Contains("(up to 2 steps): 4 things", text);
+        Assert.Contains("(other)\n   report: Sales Summary\n", text);
+        Assert.Contains("(shared files)\n   Sales/modDb.bas  [in 3 projects: Order Entry, P2, P3]: Load\n", text);
+        Assert.DoesNotContain("Order Entry\n   Sales/modDb.bas", text);
+        Assert.Contains("(up to 1 step):", Run(w => GraphQuery.Impact(g, "Orders", w, depth: 1)));
     }
 }

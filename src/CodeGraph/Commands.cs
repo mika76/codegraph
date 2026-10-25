@@ -72,9 +72,9 @@ public static class Commands
         return 0;
     }
 
-    public static int Path(Config cfg, string a, string b)
+    public static int Path(Config cfg, string a, string b, int maxLen)
     {
-        GraphQuery.Path(LoadGraph(cfg), a, b, Console.Out);
+        GraphQuery.Path(LoadGraph(cfg), a, b, Console.Out, maxLen);
         return 0;
     }
 

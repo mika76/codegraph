@@ -9,7 +9,7 @@ public static class Cli
         Usage:  codegraph build [--full] [--no-vault]    scan repos, write graph.json, report and vault
                 codegraph show <name>                    a project/file/routine/DB object and its connections
                 codegraph impact <name> [--depth N]      what depends on it (directly or indirectly)
-                codegraph path <a> <b>                   how two things are connected
+                codegraph path <a> <b> [--max-len N]     how two things are connected (chains up to N steps)
                 codegraph mcp                            serve the graph to AI assistants (MCP over stdio)
                 codegraph release-snapshot <ver> [--date yyyy-mm-dd]
                                                          add a release with current project versions to releases.json
@@ -61,8 +61,9 @@ public static class Cli
                 int depth = int.TryParse(TakeOption(args, "--depth"), out var d) ? d : 3;
                 return Commands.Impact(cfg, Single(args, "name"), depth);
             case "path":
-                if (args.Count != 2) throw new CodeGraphException("Usage: codegraph path <a> <b>");
-                return Commands.Path(cfg, args[0], args[1]);
+                int maxLen = int.TryParse(TakeOption(args, "--max-len"), out var ml) && ml > 0 ? ml : 8;
+                if (args.Count != 2) throw new CodeGraphException("Usage: codegraph path <a> <b> [--max-len N]");
+                return Commands.Path(cfg, args[0], args[1], maxLen);
             case "mcp":
                 ExpectNoMore(args);
                 return Commands.Mcp(cfg);

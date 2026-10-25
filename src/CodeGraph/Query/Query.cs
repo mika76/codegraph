@@ -179,8 +179,12 @@ public static class GraphQuery
         }
     }
 
-    /// <summary>Everything that (directly or indirectly) depends on the given node.</summary>
-    public static void Impact(Graph g, string name, TextWriter w, int depth = 3)
+    /// <summary>
+    /// Everything that (directly or indirectly) depends on the given node, grouped by project. Files built into more
+    /// than two projects are listed once under "(shared files)"; DB objects and other nodes (reports, patches, ...)
+    /// by kind. <paramref name="ids"/> adds each file's node id.
+    /// </summary>
+    public static void Impact(Graph g, string name, TextWriter w, int depth = 3, bool ids = false)
     {
         var nid = Choose(g, name, w);
         if (nid is null) return;
@@ -215,7 +219,8 @@ public static class GraphQuery
                 }
         }
         var affected = seen.Keys.Where(s => !start.Contains(s)).ToList();
-        w.WriteLine($"Impact of changing {Label(g, nid)} (up to {depth} steps): {affected.Count} things\n");
+        w.WriteLine($"Impact of changing {Label(g, nid)}{(ids ? $"  {{{nid}}}" : "")} " +
+                    $"(up to {depth} step{(depth == 1 ? "" : "s")}): {affected.Count} things\n");
         var byProj = new Dictionary<string, Dictionary<string, HashSet<string>>>();
         HashSet<string> Bucket(string proj, string key)
         {
@@ -232,18 +237,33 @@ public static class GraphQuery
                 Bucket("(database)", n.Kind).Add(n.Name);
                 continue;
             }
-            bool isSym = s.StartsWith("sym:", StringComparison.Ordinal);
-            string? f = isSym ? n.Str("file") : s.StartsWith("file:", StringComparison.Ordinal) ? s : null;
-            var fn = !string.IsNullOrEmpty(f) ? g.GetNode(f) : null;
-            var projs = (fn?.Data["projects"] as JsonArray)?.Select(p => g.GetNode(p?.ToString() ?? "")?.Name ?? p?.ToString() ?? "").ToList() ?? [];
-            if (projs.Count == 0) projs = [$"(folder {fn?.Str("area") ?? "?"})"];
             if (s.StartsWith("proj:", StringComparison.Ordinal))
             {
                 Bucket(n.Name, "project").Add("(whole project)");
                 continue;
             }
+            bool isSym = s.StartsWith("sym:", StringComparison.Ordinal);
+            string? f = isSym ? n.Str("file") : s.StartsWith("file:", StringComparison.Ordinal) ? s : null;
+            var fn = !string.IsNullOrEmpty(f) ? g.GetNode(f) : null;
+            if (fn is null)
+            {
+                // reports, patches, releases, libraries ...: by kind
+                Bucket("(other)", n.Kind).Add(n.Name);
+                continue;
+            }
+            var projs = (fn.Data["projects"] as JsonArray)?.Select(p => g.GetNode(p?.ToString() ?? "")?.Name ?? p?.ToString() ?? "").ToList() ?? [];
+            string key = (fn.Str("path") ?? fn.Name) + (ids ? $"  {{{fn.Id}}}" : "");
+            string member = isSym ? n.Str("name") ?? "" : "";
+            if (projs.Count > 2)
+            {
+                var sorted = projs.Order(StringComparer.Ordinal).ToList();
+                Bucket("(shared files)", $"{key}  [in {projs.Count} projects: {string.Join(", ", sorted.Take(5))}" +
+                                         $"{(projs.Count > 5 ? $" (+{projs.Count - 5})" : "")}]").Add(member);
+                continue;
+            }
+            if (projs.Count == 0) projs = [$"(folder {fn.Str("area") ?? "?"})"];
             foreach (var p in projs)
-                Bucket(p, fn?.Str("path") ?? n.Str("name") ?? "").Add(isSym ? n.Str("name") ?? "" : "");
+                Bucket(p, key).Add(member);
         }
         foreach (var p in byProj.Keys.Order(StringComparer.Ordinal))
         {
@@ -257,57 +277,77 @@ public static class GraphQuery
         }
     }
 
-    /// <summary>Shortest dependency path between two things.</summary>
-    public static void Path(Graph g, string a, string b, TextWriter w, int maxLen = 8)
+    /// <summary>
+    /// Shortest chain (at most <paramref name="maxLen"/> steps) between two things over all relations. A one-way
+    /// chain (a uses ... b, or b uses ... a) is preferred; only when there is none does it fall back to a chain that
+    /// changes direction (e.g. two files importing the same library), and says so. Repo, area and solution
+    /// membership is not followed: it would connect everything in a repository.
+    /// </summary>
+    public static void Path(Graph g, string a, string b, TextWriter w, int maxLen = 8, bool ids = false)
     {
         var s = Choose(g, a, w);
         var t = Choose(g, b, w);
         if (s is null || t is null) return;
-        var adj = new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
-        void AddAdj(string from, string to, string rel, string d) =>
-            (adj.TryGetValue(from, out var l) ? l : adj[from] = []).Add((to, rel, d));
+        var fwd = new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
+        var back = new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
         foreach (var e in g.Edges)
         {
-            string rel = e.Relation;
-            if (DepRels.Contains(rel) || (rel == "contains" && (e.Source.StartsWith("file:", StringComparison.Ordinal) || e.Source.StartsWith("sym:", StringComparison.Ordinal))))
-            {
-                AddAdj(e.Source, e.Target, rel, "->");
-                AddAdj(e.Target, e.Source, rel, "<-");
-            }
+            if (e.Relation == "contains" && (e.Source.StartsWith("repo:", StringComparison.Ordinal)
+                || e.Source.StartsWith("area:", StringComparison.Ordinal) || e.Source.StartsWith("sln:", StringComparison.Ordinal)))
+                continue;
+            (fwd.TryGetValue(e.Source, out var l) ? l : fwd[e.Source] = []).Add((e.Target, e.Relation, "->"));
+            (back.TryGetValue(e.Target, out var l2) ? l2 : back[e.Target] = []).Add((e.Source, e.Relation, "<-"));
         }
-        var prev = new Dictionary<string, (string From, string Rel, string Dir)?> { [s] = null };
+        var down = Bfs(s, t, n => fwd.GetValueOrDefault(n) ?? [], maxLen);
+        var up = Bfs(s, t, n => back.GetValueOrDefault(n) ?? [], maxLen);
+        var steps = down is null ? up : up is null || down.Count <= up.Count ? down : up;
+        bool mixed = false;
+        if (steps is null)
+        {
+            steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []), maxLen);
+            mixed = steps is not null;
+        }
+        if (steps is null)
+        {
+            w.WriteLine($"No connection found within {maxLen} step{(maxLen == 1 ? "" : "s")}.");
+            return;
+        }
+        string Id(string nid) => ids ? $"  {{{nid}}}" : "";
+        w.WriteLine(Label(g, s) + Id(s));
+        foreach (var (rel, d, c) in steps)
+        {
+            string arrow = d == "->" ? $"--{rel}-->" : $"<--{rel}--";
+            w.WriteLine($"  {arrow} {Label(g, c)}{Id(c)}");
+        }
+        if (mixed)
+            w.WriteLine("(No one-way chain: this path changes direction, e.g. both ends use the same thing or are used " +
+                        "by the same thing, so it may not be a real dependency.)");
+    }
+
+    private static List<(string Rel, string Dir, string Node)>? Bfs(string s, string t,
+        Func<string, IEnumerable<(string Next, string Rel, string Dir)>> next, int maxLen)
+    {
+        var prev = new Dictionary<string, (string From, string Rel, string Dir, int Depth)> { [s] = ("", "", "", 0) };
         var q = new Queue<string>();
         q.Enqueue(s);
-        while (q.Count > 0)
+        while (q.Count > 0 && !prev.ContainsKey(t))
         {
             var cur = q.Dequeue();
-            if (cur == t) break;
-            foreach (var (nxt, rel, d) in adj.GetValueOrDefault(cur) ?? [])
+            int depth = prev[cur].Depth;
+            if (depth >= maxLen) continue;
+            foreach (var (nxt, rel, d) in next(cur))
                 if (!prev.ContainsKey(nxt))
                 {
-                    prev[nxt] = (cur, rel, d);
+                    prev[nxt] = (cur, rel, d, depth + 1);
                     q.Enqueue(nxt);
                 }
         }
-        if (!prev.ContainsKey(t))
-        {
-            w.WriteLine("No connection found.");
-            return;
-        }
-        var steps = new List<(string P, string Rel, string Dir, string C)>();
-        var node = t;
-        while (prev[node] is { } pv)
-        {
-            steps.Add((pv.From, pv.Rel, pv.Dir, node));
-            node = pv.From;
-        }
+        if (!prev.ContainsKey(t)) return null;
+        var steps = new List<(string Rel, string Dir, string Node)>();
+        for (var node = t; node != s; node = prev[node].From)
+            steps.Add((prev[node].Rel, prev[node].Dir, node));
         steps.Reverse();
-        w.WriteLine(Label(g, s));
-        foreach (var (_, rel, d, c) in steps.Take(maxLen * 3))
-        {
-            string arrow = d == "->" ? $"--{rel}-->" : $"<--{rel}--";
-            w.WriteLine($"  {arrow} {Label(g, c)}");
-        }
+        return steps;
     }
 
     /// <summary>

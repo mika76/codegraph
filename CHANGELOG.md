@@ -18,6 +18,13 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ### 🔄 Changed
 - 🎯 A node id given as a name now always picks that node, even when other nodes share its name.
+- 🧭 `path` follows every relation (also `uses_library`, `released_in`, `opens`, `uses_value`, ...) and prefers a
+  one-way chain (A uses ... B, or B uses ... A). A chain that changes direction - two files importing the same
+  library - is only shown when there is no one-way chain, and is marked as such. The search stops at `--max-len`
+  steps (default 8), not just the output.
+- 📦 `impact` lists a file built into more than two projects once, under "(shared files)" with its projects,
+  instead of under every project. Reports, patches and other items are grouped by kind under "(other)" instead of
+  "(folder ?)".
 
 ### 🐛 Fixed
 - 🔧 C++ projects take their output file from the linker settings - `/out:` in `.dsp`, the linker's `OutputFile` in
