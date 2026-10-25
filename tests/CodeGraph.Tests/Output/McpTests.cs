@@ -66,6 +66,8 @@ public sealed class McpTests : IDisposable
     {
         var s = Server();
         Assert.Equal(-32700, (int)s.Handle("{not json")!["error"]!["code"]!);
+        Assert.Equal(-32600, (int)s.Handle("""[{"jsonrpc":"2.0","id":1,"method":"ping"}]""")!["error"]!["code"]!); // batch
+        Assert.Equal(-32600, (int)s.Handle("42")!["error"]!["code"]!);
         Assert.Equal(-32601, (int)Request(s, "resources/list")["error"]!["code"]!);
         var unknown = Request(s, "tools/call", new JsonObject { ["name"] = "nope" });
         Assert.Equal(-32602, (int)unknown["error"]!["code"]!);
@@ -140,7 +142,9 @@ public sealed class McpTests : IDisposable
         Assert.False(Call(s, "show", new JsonObject { ["name"] = "Orders", ["relation"] = "WRITES" }).IsError);
         Assert.Equal(("depth must be at least 1 (got -1)", true), Call(s, "impact", new JsonObject { ["name"] = "Orders", ["depth"] = -1 }));
         Assert.Equal(("limit must be a whole number", true), Call(s, "search", new JsonObject { ["query"] = "x", ["limit"] = "many" }));
-        Assert.Contains("(up to 10 steps)", Call(s, "impact", new JsonObject { ["name"] = "Orders", ["depth"] = 99 }).Text);
+        var capped = Call(s, "impact", new JsonObject { ["name"] = "Orders", ["depth"] = 99 }).Text;
+        Assert.Contains("(up to 10 steps)", capped);
+        Assert.EndsWith("\n(depth 99 was capped at 10.)", capped);
         Assert.Contains("within 2 steps", Call(s, "path", new JsonObject { ["from"] = "Unused", ["to"] = "Orders", ["max_len"] = 2 }).Text);
     }
 

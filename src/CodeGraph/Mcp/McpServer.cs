@@ -69,7 +69,11 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         JsonObject msg;
         try
         {
-            msg = JsonNode.Parse(line) as JsonObject ?? throw new JsonException("expected a JSON object");
+            var node = JsonNode.Parse(line);
+            if (node is not JsonObject obj)
+                // valid JSON, but not one request (batches are not part of MCP since 2025-06-18)
+                return Error(null, -32600, node is JsonArray ? "Invalid request: batches are not supported" : "Invalid request: expected a JSON object");
+            msg = obj;
         }
         catch (JsonException ex)
         {
@@ -241,6 +245,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
         string text;
+        _notes.Clear();
         bool isError = false;
         try
         {
@@ -256,6 +261,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             (text, isError) = ($"{name} failed: {ex.Message}", true);
         }
         text = Cut(text);
+        if (_notes.Count > 0) text += "\n(" + string.Join(" ", _notes) + ")";
         if (!_restartNoted && ExeUpdated())
         {
             // graph.json is reloaded on its own, but new code needs a new process
@@ -315,13 +321,17 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
     private static string Need(JsonObject a, string key) =>
         Text(a, key) ?? throw new ToolException($"Missing argument: {key}");
 
-    /// <summary>An integer argument; below <paramref name="min"/> is an error, above <paramref name="max"/> is capped.</summary>
-    private static int Num(JsonObject a, string key, int def, int min, int max)
+    /// <summary>Notes for the current call's answer (e.g. a capped argument).</summary>
+    private readonly List<string> _notes = [];
+
+    /// <summary>An integer argument; below <paramref name="min"/> is an error, above <paramref name="max"/> is capped (and said).</summary>
+    private int Num(JsonObject a, string key, int def, int min, int max)
     {
         if (a[key] is null) return def;
         if (a[key] is not JsonValue v || !(v.TryGetValue(out int n) || (v.TryGetValue(out string? s) && int.TryParse(s, out n))))
             throw new ToolException($"{key} must be a whole number");
         if (n < min) throw new ToolException($"{key} must be at least {min} (got {n})");
+        if (n > max) _notes.Add($"{key} {n} was capped at {max}.");
         return Math.Min(n, max);
     }
 

@@ -244,6 +244,23 @@ public class QueryTests
     }
 
     [Fact]
+    public void Impact_folds_folders_with_many_files()
+    {
+        var g = SampleGraph.Create();
+        for (int i = 1; i <= 7; i++)
+        {
+            string f = $"file:Shop:Database/Patches/Patch{i:D2}.sql";
+            g.Node(f, ("kind", "file"), ("name", $"Patch{i:D2}.sql"), ("path", $"Database/Patches/Patch{i:D2}.sql"), ("area", "Database"));
+            g.AddEdge(f, "db:usp_Save", "alters");
+        }
+        var text = Run(w => GraphQuery.Impact(g, "usp_Save", w, depth: 1));
+        Assert.Contains("   Database/Patches/ (7 files): Patch01.sql, Patch02.sql, Patch03.sql, Patch04.sql, Patch05.sql (+2)\n", text);
+        Assert.DoesNotContain("Patch06.sql", text);
+        Assert.Contains("(up to 1 step): 8 things", text);
+        Assert.Contains("(up to 1 step): 1 thing\n", Run(w => GraphQuery.Impact(SampleGraph.Create(), "modDb.Load", w, depth: 1)));
+    }
+
+    [Fact]
     public void Mixed_paths_do_not_go_through_releases_or_projects()
     {
         var g = PathGraph();

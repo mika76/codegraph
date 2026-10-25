@@ -890,6 +890,8 @@ public sealed partial class Builder
                         if (N(t).Kind is "interface" or "class" && fam == "cs" && Implementations(fam, t, name) is { Count: > 0 } impl)
                             EdgeToTargets(caller, impl, "calls", lineAttr, ("via", "implementation"));
                     }
+                    else if (fam == "vb" && N(t).Kind == "form" && name.Equals("Show", StringComparison.OrdinalIgnoreCase))
+                        hit |= Edge(caller, t, "opens", lineAttr); // frmOrder.Show vbModal - the VB form's own method
                     else if (t != caller && !caller.StartsWith(t + ".", StringComparison.Ordinal))
                         hit |= Edge(caller, t, "uses_type", lineAttr);
                 }

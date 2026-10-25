@@ -10,7 +10,7 @@ public static class GraphQuery
     [
         "calls", "instantiates", "uses_type", "inherits", "calls_native", "includes", "mentions", "reads",
         "imports", "uses_component", "ships", "calls_api", "renders",
-        "writes", "executes", "references", "triggers_on", "depends_on", "uses_code_of", "alters",
+        "writes", "executes", "references", "triggers_on", "depends_on", "uses_code_of", "alters", "opens",
     ];
 
     private static string Low(string? s) => (s ?? "").ToLowerInvariant();
@@ -260,7 +260,7 @@ public static class GraphQuery
         }
         var affected = seen.Keys.Where(s => !start.Contains(s)).ToList();
         w.WriteLine($"Impact of changing {Label(g, nid)}{(ids ? $"  {{{nid}}}" : "")} " +
-                    $"(up to {depth} step{(depth == 1 ? "" : "s")}): {affected.Count} things\n");
+                    $"(up to {depth} step{(depth == 1 ? "" : "s")}): {affected.Count} thing{(affected.Count == 1 ? "" : "s")}\n");
         var byProj = new Dictionary<string, Dictionary<string, HashSet<string>>>();
         HashSet<string> Bucket(string proj, string key)
         {
@@ -305,17 +305,37 @@ public static class GraphQuery
             foreach (var p in projs)
                 Bucket(p, key).Add(member);
         }
+        static string List(IReadOnlyList<string> xs, int max) =>
+            string.Join(", ", xs.Take(max)) + (xs.Count > max ? $" (+{xs.Count - max})" : "");
         foreach (var p in byProj.Keys.Order(StringComparer.Ordinal))
         {
             w.WriteLine(p);
-            foreach (var (f, set) in byProj[p].OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            // a folder with many affected files (old patch scripts ...) is one line: the folder, a count, a few names
+            var entries = byProj[p].OrderBy(kv => kv.Key, StringComparer.Ordinal).ToList();
+            var bigDirs = entries.Where(kv => kv.Key.Contains('/')).GroupBy(kv => DirOf(kv.Key))
+                .Where(gr => gr.Count() >= FoldFiles).ToDictionary(gr => gr.Key, gr => gr.ToList());
+            var printed = new HashSet<string>();
+            foreach (var (f, set) in entries)
             {
+                if (f.Contains('/') && bigDirs.TryGetValue(DirOf(f), out var dir))
+                {
+                    if (printed.Add(DirOf(f)))
+                        w.WriteLine($"   {DirOf(f)}/ ({dir.Count} files): {List(dir.Select(kv => FileOf(kv.Key)).ToList(), 5)}");
+                    continue;
+                }
                 var items = set.Where(i => i.Length > 0).Order(StringComparer.Ordinal).ToList();
-                string shown = string.Join(", ", items.Take(8)) + (items.Count > 8 ? $" (+{items.Count - 8})" : "");
-                w.WriteLine($"   {f}{(shown.Length > 0 ? ": " + shown : "")}");
+                w.WriteLine($"   {f}{(items.Count > 0 ? ": " + List(items, 8) : "")}");
             }
         }
     }
+
+    /// <summary>Folders with at least this many affected files are folded into one line.</summary>
+    private const int FoldFiles = 6;
+
+    // impact keys are "path/to/file.ext" optionally followed by "  {id}" or "  [in N projects: ...]"
+    private static string PathOf(string key) => key.Split("  ", 2)[0];
+    private static string DirOf(string key) => PathOf(key) is var p && p.LastIndexOf('/') is var i and > 0 ? p[..i] : "";
+    private static string FileOf(string key) => PathOf(key) is var p ? p[(p.LastIndexOf('/') + 1)..] : key;
 
     /// <summary>
     /// Shortest chain (at most <paramref name="maxLen"/> steps) between two things over all relations. A one-way

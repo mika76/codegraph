@@ -36,6 +36,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🧭 `path` no longer connects two things through a hub when it has to change direction: two screens in the same
+  release, patch, installer or project are not "connected" by that.
+- 📨 `codegraph mcp` answers a JSON-RPC batch or other non-object with "Invalid request" (-32600), not "Parse error".
 - 🆔 A name shaped like a node id (`db:orders`, `sym:...`) is looked up as an id only, ignoring case: one that
   doesn't exist gives "No node has the id ..." instead of silently answering about another node that contains the
   text. MCP `search` reports an unknown `kind` or `repo` as an error with the valid values.
@@ -62,6 +65,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   declared.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
+- 📁 `impact` folds a folder with many affected files (old patch scripts ...) into one line with a count and a few
+  names; MCP says when it capped `depth`, `limit` or another number; "1 thing" instead of "1 things".
+- 🪟 VB6: `frmOrder.Show` links the caller to the form as `opens` (instead of only "uses type"), and `impact` on a
+  form lists where it is opened from.
 - 🧭 JS/TS composables and stores: functions defined inside a function (`useOrders() { const load = ... }`) or in a
   store (`defineStore('shop', { actions: { refresh() {} } })`, also setup-style) are its members
   (`useOrders.load`), and `const svc = useOrders(); svc.load()`, `const { load } = useOrders()` and

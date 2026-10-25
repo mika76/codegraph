@@ -390,6 +390,21 @@ public class BuilderTests
         Assert.Contains("src/Orders.vue", w.ToString());
     }
 
+    [Fact]
+    public void A_vb6_form_shown_from_code_is_opened_by_it()
+    {
+        var main = Vb("vb6", Sym("frmMain", "form"), Sym("cmdOrder_Click", "sub", "frmMain"));
+        main.Refs.Add(new Ref { Kind = "member", Qual = "frmOrder", Name = "Show", From = "cmdOrder_Click", FromParent = "frmMain", Line = 5 });
+        main.Refs.Add(new Ref { Kind = "member", Qual = "frmOrder", Name = "Caption", From = "cmdOrder_Click", FromParent = "frmMain", Line = 6 });
+        var order = Vb("vb6", Sym("frmOrder", "form"));
+        var g = Build(Cfg("Shop"), Rec("App/frmMain.frm", main), Rec("App/frmOrder.frm", order));
+        const string Click = "sym:Shop:App/frmMain.frm#frmMain.cmdOrder_Click", Order = "sym:Shop:App/frmOrder.frm#frmOrder";
+        Assert.True(HasEdge(g, Click, Order, "opens"));
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, Order, w, depth: 1);
+        Assert.Contains("cmdOrder_Click", w.ToString()); // where is this form opened from
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };
