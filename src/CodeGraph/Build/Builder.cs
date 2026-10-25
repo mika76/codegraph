@@ -724,10 +724,12 @@ public sealed partial class Builder
             case "endpoint":
             {
                 string? verb = XStr(rf.Extra, "verb");
-                // Url.Action(action, controller) names the action itself; routes are the fallback
-                var hits = rf.Extra?["conventional"] is not null && _actions.GetValueOrDefault(name) is { Count: > 0 and <= 3 } byName
-                    ? byName.Distinct().ToList()
-                    : MatchRoute(verb, name);
+                // Url.Action(action, controller) names an action of the same web app: by name first, routes as the
+                // fallback, both limited to what the view's project can see (never another repo's API)
+                bool conventional = rf.Extra?["conventional"] is not null;
+                var hits = conventional ? Pick(fid, _actions.GetValueOrDefault(name) ?? []) : [];
+                if (hits.Count == 0) hits = MatchRoute(verb, name);
+                if (conventional) hits = hits.Where(h => Visible(fid, h) && Rank(fid, h) <= 3).ToList(); // same repo
                 if (hits.Count == 0)
                 {
                     // a URL passed to an unknown function is only a guess: not an "unmatched API call"

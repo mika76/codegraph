@@ -52,7 +52,7 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   unmatched call when it doesn't. Router navigation (`router.push`, `navigateTo`, ...) is never an API call, and
   paths like `/2fa/verify` or `/:id/edit` are recognised.
 - 🧩 `Url.Action("Edit", "Orders")` in Razor views links to `OrdersController.Edit` by name, also when the action
-  has an attribute route that looks different.
+  has an attribute route that looks different, and never to a controller in another repository.
 - 🔗 Front-end calls match API routes whatever the base path (`/api`, `/v1`, `/backend/api`, or a prefix only the
   server has - one that routes of several controllers share), not just a leading `/api`.
 - 🌿 More release branch names are understood - `releases/v2.4.1`, `hotfix/2.4.1-rc1`, `R2_4_0`,

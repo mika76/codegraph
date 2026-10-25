@@ -308,6 +308,20 @@ public class BuilderTests
         Assert.False(HasEdge(g, "sym:Web:Views/Scheduler/add.cshtml#add", "sym:Web:Controllers/SettingsController.cs#SettingsController.Edit", "calls_api"));
     }
 
+    [Fact]
+    public void Url_action_never_links_to_another_apps_controller()
+    {
+        var api = new FileFacts { Lang = "csharp", Symbols = [Sym("ReportsController", "class"), Sym("Run", "method", "ReportsController")] };
+        api.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "reports/run" });
+        var view = new FileFacts { Lang = "razor", Symbols = [Sym("Index", "view")] };
+        var r = new Ref { Kind = "endpoint", Name = "reports/run", FromParent = "Index", Line = 1 };
+        r.X["conventional"] = true;
+        view.Refs.Add(r);
+        var g = Build(Cfg("Api", "Web"), Rec("Controllers/ReportsController.cs", api, "Api", "C:/repos/Api"),
+            Rec("Views/Home/Index.cshtml", view, "Web", "C:/repos/Web"));
+        Assert.DoesNotContain(g.Edges, e => e.Relation == "calls_api");
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };
