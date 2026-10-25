@@ -181,6 +181,19 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
+    public void Says_once_when_the_executable_was_updated_under_it()
+    {
+        string exe = Path.Combine(_dir, "codegraph.exe");
+        File.WriteAllText(exe, "old");
+        File.SetLastWriteTimeUtc(exe, DateTime.UtcNow.AddHours(-1));
+        var s = new McpServer(GraphPath, ReportPath, exe);
+        Assert.DoesNotContain("restart", Call(s, "search", new JsonObject { ["query"] = "Orders" }).Text);
+        File.SetLastWriteTimeUtc(exe, DateTime.UtcNow);  // publish.ps1 put a new build there
+        Assert.Contains("restart the codegraph MCP server", Call(s, "search", new JsonObject { ["query"] = "Orders" }).Text);
+        Assert.DoesNotContain("restart", Call(s, "search", new JsonObject { ["query"] = "Orders" }).Text);
+    }
+
+    [Fact]
     public void Long_output_is_cut_at_a_line_end()
     {
         string text = string.Concat(Enumerable.Range(0, 5000).Select(i => $"line {i:D5}\n"));

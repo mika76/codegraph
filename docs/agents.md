@@ -75,6 +75,10 @@ Claude Code, `.cursor/mcp.json` in Cursor, `.vscode/mcp.json` with `"servers"` i
 
 The server logs to stderr; the MCP client shows those lines in its server log.
 
+A new `graph.json` is picked up automatically, but a new `codegraph.exe` is not: the running server keeps the code
+it started with. After installing or publishing a new version, restart the MCP server (or the client session). The
+server says so in its next answer when it notices a newer executable on disk.
+
 ## Claude Code: the bundled skills
 
 `claude-setup/` contains three skills. Install them into the codegraph folder's `.claude/`:

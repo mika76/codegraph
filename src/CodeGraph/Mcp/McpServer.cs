@@ -9,8 +9,18 @@ namespace CodeGraph.Mcp;
 /// A Model Context Protocol server over stdio: JSON-RPC 2.0, one message per line. It exposes the graph queries as
 /// read-only tools. graph.json is loaded on first use and loaded again when a build has rewritten it.
 /// </summary>
-public sealed class McpServer(string graphPath, string reportPath)
+public sealed class McpServer(string graphPath, string reportPath, string? exePath = null)
 {
+    // the executable this server runs from and its time stamp at start, to notice a newer build on disk
+    private readonly string? _exe = exePath ?? Environment.ProcessPath;
+    private readonly DateTime _exeStamp = StampOf(exePath ?? Environment.ProcessPath);
+    private bool _restartNoted;
+
+    private static DateTime StampOf(string? path) =>
+        !string.IsNullOrEmpty(path) && File.Exists(path) ? File.GetLastWriteTimeUtc(path) : DateTime.MinValue;
+
+    private bool ExeUpdated() => _exeStamp != DateTime.MinValue && StampOf(_exe) > _exeStamp;
+
     /// <summary>Longest tool result; longer output is cut at a line end with a hint to narrow the query.</summary>
     public const int MaxChars = 40_000;
 
@@ -240,9 +250,19 @@ public sealed class McpServer(string graphPath, string reportPath)
             _log.WriteLine($"codegraph mcp: {name} failed: {ex}");
             (text, isError) = ($"{name} failed: {ex.Message}", true);
         }
+        text = Cut(text);
+        if (!_restartNoted && ExeUpdated())
+        {
+            // graph.json is reloaded on its own, but new code needs a new process
+            _restartNoted = true;
+            const string note = "codegraph.exe has been updated since this server started; restart the codegraph MCP " +
+                                "server (or the session) to use the new version.";
+            _log.WriteLine("codegraph mcp: " + note);
+            text += "\n\n(Note: " + note + ")";
+        }
         return new JsonObject
         {
-            ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = Cut(text) }),
+            ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }),
             ["isError"] = isError,
         };
     }
