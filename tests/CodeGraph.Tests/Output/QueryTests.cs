@@ -75,6 +75,12 @@ public class QueryTests
         Assert.Equal("db:Orders", GraphQuery.Resolve(g, "Orders", out var amb));
         Assert.Equal(["db:Orders", "db:other.Orders"], amb);
         Assert.Null(GraphQuery.Resolve(g, "zzz", out _));
+        // id-shaped: exact id (any case) or nothing - never a substring match on another node
+        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "DB:orders", out _));
+        Assert.Null(GraphQuery.Resolve(g, "db:Ord", out _));
+        Assert.Equal("No node has the id 'db:Ord'.\n", Run(w => GraphQuery.Show(g, "db:Ord", w)));
+        Assert.Equal("frmMain.frm (file)  [Sales/frmMain.frm]",
+            Run(w => GraphQuery.Show(g, "Sales/frmMain.frm", w)).Split('\n')[0]); // a path with no id prefix still matches
     }
 
     [Fact]

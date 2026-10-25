@@ -94,8 +94,12 @@ public sealed class McpTests : IDisposable
         Assert.Contains($"frmMain.Save (sub)  [Sales/frmMain.frm:10]  {{{SampleGraph.Save}}}", text);
         var limited = Call(Server(), "search", new JsonObject { ["query"] = "save", ["limit"] = 1 }).Text;
         Assert.Contains("... 1 more", limited);
-        var badKind = Call(Server(), "search", new JsonObject { ["query"] = "save", ["kind"] = "widget" }).Text;
-        Assert.Contains("Kinds in the graph: area, db_proc, db_table, file", badKind);
+        var (badKind, kindErr) = Call(Server(), "search", new JsonObject { ["query"] = "save", ["kind"] = "widget" });
+        Assert.True(kindErr);
+        Assert.StartsWith("Unknown kind 'widget'. Kinds in the graph: area, db_proc, db_table, file", badKind);
+        var (badRepo, repoErr) = Call(Server(), "search", new JsonObject { ["query"] = "save", ["repo"] = "Nope" });
+        Assert.True(repoErr);
+        Assert.Equal("Unknown repo 'Nope'. Repositories: Shop", badRepo);
     }
 
     [Fact]
@@ -153,6 +157,9 @@ public sealed class McpTests : IDisposable
                      "  Orders (db_table)  {db:Orders}\n  Orders (db_table)  {db:other.Orders}\n", text);
         Assert.False(Call(s, "show", new JsonObject { ["name"] = "db:other.Orders" }).IsError);
         Assert.Equal(("Nothing matches 'zzz'. Try the search tool.", true), Call(s, "impact", new JsonObject { ["name"] = "zzz" }));
+        // an id that doesn't exist is not answered with whatever contains it
+        Assert.Equal(("No node has the id 'db:Ord'. Try the search tool.", true), Call(s, "show", new JsonObject { ["name"] = "db:Ord" }));
+        Assert.False(Call(s, "show", new JsonObject { ["name"] = "DB:USP_SAVE" }).IsError); // ids ignore case
         Assert.Equal(("Missing argument: to", true), Call(s, "path", new JsonObject { ["from"] = "usp_Save" }));
         Assert.True(Call(s, "show", new JsonObject { ["name"] = "Orders", ["direction"] = "up" }).IsError);
     }

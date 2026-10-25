@@ -133,10 +133,10 @@ public sealed class McpServer(string graphPath, string reportPath)
             }, "query"),
         Tool("show",
             "A node with its attributes and its connections grouped by relation, each with the neighbour's id. " +
-            "Filter with relation and direction, e.g. who writes a table: relation=writes, direction=in. Relations: " +
-            "contains, calls, instantiates, uses_type, inherits, calls_native, includes, imports, uses_component, " +
-            "calls_api, renders, mentions, uses_value, reads, writes, executes, references, triggers_on, defines, " +
-            "alters, depends_on, uses_library, uses_code_of, ships, released_in, opens.",
+            "Filter with relation and direction, e.g. who writes a table: relation=writes, direction=in. Common " +
+            "relations: contains, calls, instantiates, uses_type, inherits, imports, calls_api, reads, writes, " +
+            "executes, references, depends_on, uses_library, ships, released_in. Your own file formats add more; an " +
+            "unknown relation returns every relation in this graph.",
             new JsonObject
             {
                 ["name"] = Str("Node name, path or id."),
@@ -260,17 +260,15 @@ public sealed class McpServer(string graphPath, string reportPath)
         string query = Need(a, "query");
         string? kind = Text(a, "kind"), repo = Text(a, "repo");
         int limit = Num(a, "limit", 25, 1, 500);
+        if (kind is not null && !g.Nodes.Any(n => string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)))
+            throw new ToolException($"Unknown kind '{kind}'. Kinds in the graph: " +
+                                    string.Join(", ", g.Nodes.Select(n => n.Kind).Distinct().Order(StringComparer.Ordinal)));
+        if (repo is not null && !g.Nodes.Any(n => n.Kind == "repo" && string.Equals(n.Name, repo, StringComparison.OrdinalIgnoreCase)))
+            throw new ToolException($"Unknown repo '{repo}'. Repositories: " +
+                                    string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
         var hits = GraphQuery.Search(g, query, kind, repo);
         var w = new StringWriter { NewLine = "\n" };
-        if (hits.Count == 0)
-        {
-            w.WriteLine($"Nothing matches '{query}'.");
-            if (!string.IsNullOrEmpty(kind) && !g.Nodes.Any(n => string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)))
-                w.WriteLine("Kinds in the graph: " + string.Join(", ", g.Nodes.Select(n => n.Kind).Distinct().Order(StringComparer.Ordinal)));
-            if (!string.IsNullOrEmpty(repo) && !g.Nodes.Any(n => n.Kind == "repo" && string.Equals(n.Name, repo, StringComparison.OrdinalIgnoreCase)))
-                w.WriteLine("Repositories: " + string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
-            return w.ToString();
-        }
+        if (hits.Count == 0) return $"Nothing matches '{query}'.\n";
         w.WriteLine($"{hits.Count} match{(hits.Count == 1 ? "" : "es")} for '{query}':");
         foreach (var h in hits.Take(limit)) w.WriteLine($"  {GraphQuery.Label(g, h)}  {{{h}}}");
         if (hits.Count > limit) w.WriteLine($"  ... {hits.Count - limit} more (narrow with kind or repo, or raise limit)");
@@ -283,7 +281,10 @@ public sealed class McpServer(string graphPath, string reportPath)
         var g = Current();
         string name = Need(a, key);
         var nid = GraphQuery.Resolve(g, name, out var ambiguous);
-        if (nid is null) throw new ToolException($"Nothing matches '{name}'. Try the search tool.");
+        if (nid is null)
+            throw new ToolException(GraphQuery.LooksLikeId(name)
+                ? $"No node has the id '{name}'. Try the search tool."
+                : $"Nothing matches '{name}'. Try the search tool.");
         if (ambiguous.Count == 0) return nid;
         var w = new StringWriter { NewLine = "\n" };
         w.WriteLine($"'{name}' matches several things. Call again with one of these ids as {key}:");

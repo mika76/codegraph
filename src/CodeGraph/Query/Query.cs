@@ -58,6 +58,9 @@ public static class GraphQuery
     {
         ambiguous = [];
         if (g.HasNode(name.Trim())) return name.Trim();
+        // an id that doesn't exist must not fall back to "anything containing it" (db:a -> Audit_Trail)
+        if (LooksLikeId(name))
+            return g.Nodes.FirstOrDefault(n => string.Equals(n.Id, name.Trim(), StringComparison.OrdinalIgnoreCase))?.Id;
         var hits = Find(g, name);
         if (hits.Count == 0) return null;
         if (hits.Count > 1)
@@ -71,12 +74,22 @@ public static class GraphQuery
         return hits[0];
     }
 
+    private static readonly string[] IdPrefixes =
+        ["repo", "area", "proj", "sln", "file", "sym", "db", "ext", "rel", "concept", "item", "fileref", "module"];
+
+    /// <summary>Whether the text is shaped like a node id ("db:orders", "sym:Repo:path#Type.Member").</summary>
+    public static bool LooksLikeId(string name)
+    {
+        int colon = name.IndexOf(':');
+        return colon > 0 && IdPrefixes.Contains(name.Trim()[..colon].ToLowerInvariant());
+    }
+
     private static string? Choose(Graph g, string name, TextWriter w)
     {
         var nid = Resolve(g, name, out var ambiguous);
         if (nid is null)
         {
-            w.WriteLine($"Nothing matches '{name}'.");
+            w.WriteLine(LooksLikeId(name) ? $"No node has the id '{name}'." : $"Nothing matches '{name}'.");
             return null;
         }
         if (ambiguous.Count > 0)

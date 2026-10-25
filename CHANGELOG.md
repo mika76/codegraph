@@ -32,6 +32,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🆔 A name shaped like a node id (`db:orders`, `sym:...`) is looked up as an id only, ignoring case: one that
+  doesn't exist gives "No node has the id ..." instead of silently answering about another node that contains the
+  text. MCP `search` reports an unknown `kind` or `repo` as an error with the valid values.
 - 🗣️ Text such as "Failed to execute telnet command" or "Execute the command" no longer counts as a call to a
   procedure named `telnet` or `the`: `EXEC name` must be followed by nothing, `;`, a parameter, a comment or the
   next statement. The report's "called but not found" list now shows where each name was first seen.
