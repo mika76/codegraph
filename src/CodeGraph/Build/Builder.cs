@@ -794,7 +794,8 @@ public sealed partial class Builder
                 // a bare string is a call only next to database access (DbAccess marks it) or with a configured
                 // prefix (e.g. a constants module naming procedures); otherwise any word could match a procedure
                 string shortName = SqlText.ShortName(name);
-                bool prefixed = _procPrefixes.Any(p => shortName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+                // the prefix alone ("sp_", as in name.StartsWith("sp_")) names nothing
+                bool prefixed = _procPrefixes.Any(p => shortName.Length > p.Length && shortName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
                 if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && (prefixed || rf.Extra?["db"] is not null))
                     return Edge(caller, tgt, "executes", lineAttr, ("via", "name in string"));
                 if (tgt is null && prefixed)

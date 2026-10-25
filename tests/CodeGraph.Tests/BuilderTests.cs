@@ -234,6 +234,11 @@ public class BuilderTests
         var g = Build(cfg, Rec("Database/procs.sql", procs), Rec("App/modNames.bas", consts));
         Assert.True(HasEdge(g, "file:Shop:App/modNames.bas", "db:bill_total", "executes"));
         Assert.False(HasEdge(g, "file:Shop:App/modNames.bas", "db:total", "executes"));
+
+        // the prefix on its own (name.StartsWith("bill_")) is no missing procedure
+        consts.Refs.Add(new Ref { Kind = "literal", Name = "bill_", From = null });
+        var r = Builder.BuildGraph(cfg, [Rec("Database/procs.sql", procs), Rec("App/modNames.bas", consts)]);
+        Assert.False(r.Unresolved.ContainsKey("exec:bill_"));
     }
 
     [Fact]
