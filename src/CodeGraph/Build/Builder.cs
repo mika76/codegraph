@@ -868,7 +868,7 @@ public sealed partial class Builder
                     .Where(t => _columns.GetValueOrDefault(t)?.ContainsKey(name) == true).ToList();
                 if (tables.Count != 1 || tables[0] == caller) return false;
                 string rel = rf.Mode switch { "write" => "writes", "alter" => "alters", _ => "reads" };
-                return Edge(caller, _columns[tables[0]][name], rel, lineAttr);
+                return Edge(caller, _columns[tables[0]][name], rel, lineAttr, ("dynamic", rf.Extra?["dynamic"]));
             }
             case "literal":
             {

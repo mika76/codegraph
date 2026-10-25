@@ -15,7 +15,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   patch scripts that read it, write it (`UPDATE ... SET`, `INSERT (...)`) or alter it (`ALTER TABLE`, also inside
   `IF NOT EXISTS`). `impact Orders.Total` answers "what breaks if I rename or change this column?". A name is
   linked only when it is qualified with a table or alias of its statement, or exactly one table of the statement has
-  that column - never guessed. The report shows how many column uses were linked.
+  that column - never guessed. Dynamic SQL a procedure builds in a string (`SET @sql = 'SELECT ...'; EXEC (@sql)`)
+  counts too, and `schema.table.column` names resolve. The report shows how many column uses were linked.
 - 🤖 **MCP server**: `codegraph mcp` serves the graph to AI assistants (Claude Code, Cursor, VS Code, ...) over
   stdio, with read-only tools `search`, `show` (filter by relation and direction), `impact`, `path`, `source`
   (a definition's code with line numbers) and `report`. Results carry node ids. An ambiguous name returns its

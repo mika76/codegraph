@@ -185,6 +185,12 @@ public static partial class SqlParser
                             refs.Add(r);
                         }
                     }
+                    // SET @sql = 'SELECT t.Col ...'; exec(@sql): its columns too, like its tables
+                    foreach (var c in SqlText.ColumnRefs(dyn, key, null, _ => line))
+                    {
+                        c.X["dynamic"] = true;
+                        refs.Add(c);
+                    }
                 }
             }
             symbols.Add(sym);

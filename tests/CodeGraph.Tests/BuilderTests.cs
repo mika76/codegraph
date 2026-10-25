@@ -516,6 +516,25 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Columns_in_dynamic_sql_and_three_part_names_are_linked()
+    {
+        var orders = CodeGraph.Parsers.SqlParser.Parse("Orders.sql", "CREATE TABLE dbo.Orders (Id int, Total money, Status int)");
+        var proc = CodeGraph.Parsers.SqlParser.Parse("p.sql", """
+            CREATE PROCEDURE dbo.usp_Report @from int AS
+            BEGIN
+              DECLARE @sql nvarchar(max)
+              SET @sql = 'SELECT dbo.Orders.Total, o.Status FROM dbo.Orders o WHERE dbo.Orders.Id > ' + CAST(@from AS varchar)
+              EXEC (@sql)
+            END
+            """);
+        var g = Build(Cfg("Shop"), Rec("Orders.sql", orders), Rec("p.sql", proc));
+        Assert.True(HasEdge(g, "db:usp_report", "col:orders.total", "reads"));   // dbo.Orders.Total (schema.table.column)
+        Assert.True(HasEdge(g, "db:usp_report", "col:orders.status", "reads"));  // o.Status (alias)
+        Assert.True(HasEdge(g, "db:usp_report", "col:orders.id", "reads"));
+        Assert.Equal("true", g.GetEdge("db:usp_report", "col:orders.total", "reads")!.Str("dynamic"));
+    }
+
+    [Fact]
     public void An_unqualified_column_in_two_joined_tables_is_not_guessed()
     {
         var orders = CodeGraph.Parsers.SqlParser.Parse("Orders.sql", "CREATE TABLE Orders (Id int, Total money)");
