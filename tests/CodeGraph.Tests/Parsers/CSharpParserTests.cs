@@ -204,8 +204,12 @@ public class CSharpParserTests
                 [DllImport("Licence.dll", EntryPoint = "CheckLic", CharSet = CharSet.Ansi)]
                 internal static extern int Check(string key);
                 [System.Runtime.InteropServices.DllImport(@"kernel32.dll")] static extern int GetTickCount();
+                [DllImport("Licence.dll", EntryPoint = "HashEx", CharSet = CharSet.Ansi)]
+                [return: MarshalAs(UnmanagedType.AnsiBStr)]
+                private static extern unsafe string Hash([MarshalAs(UnmanagedType.AnsiBStr)] string data, int len);
             }
             """);
+        Assert.Contains(f.Refs, r => r is { Kind: "native", From: "Hash", Name: "HashEx" });
         var natives = f.Refs.Where(r => r.Kind == "native").ToList();
         Assert.Contains(natives, r => r is { From: "getNextNumber", FromParent: "Native", Name: "getNextNumber" } && (string)r.X["lib"]! == "Rand.dll");
         Assert.Contains(natives, r => r is { From: "Check", Name: "CheckLic" } && (string)r.X["lib"]! == "Licence.dll");

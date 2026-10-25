@@ -41,7 +41,7 @@ public static partial class CSharpParser
     [GeneratedRegex(@"(?:\b(public|private|protected|internal)\s+)?(?:(?:new|static|unsafe|protected|internal)\s+)*\bconst\s+[\w.<>?\[\]]+\s+([A-Za-z_]\w*)\s*=\s*([^;]+);", O)] private static partial Regex ConstRe();
     [GeneratedRegex(@"\[area\]/?", O)] private static partial Regex AreaRe();
     [GeneratedRegex(@"\[\s*(?:System\.Runtime\.InteropServices\.)?DllImport(?:Attribute)?\s*\(\s*@?""([^""]+)""([^\]]*)\]", O)] private static partial Regex DllImportRe();
-    [GeneratedRegex(@"\G[^;{}]*?\bextern\s+[\w.<>\[\]?]+\s+([A-Za-z_]\w*)\s*\(", O)] private static partial Regex ExternMethodRe();
+    [GeneratedRegex(@"\G[^;{}]*?\bextern\s+(?:(?:unsafe|static|new)\s+)*[\w.<>\[\]?]+\s+([A-Za-z_]\w*)\s*\(", O)] private static partial Regex ExternMethodRe();
     [GeneratedRegex(@"\bEntryPoint\s*=\s*""([^""]+)""", O)] private static partial Regex EntryPointRe();
     // HttpClient / WebClient / RestSharp calls; group 1 is the verb when the method name says it
     [GeneratedRegex(@"\.(?:(Get|Post|Put|Delete|Patch)(?:Async|StringAsync|ByteArrayAsync|StreamAsync|FromJsonAsync|AsJsonAsync)|SendAsync|DownloadString(?:TaskAsync)?|DownloadData(?:TaskAsync)?|UploadString(?:TaskAsync)?)\s*\(|\bnew\s+(?:RestRequest|HttpRequestMessage)\b", O)]
