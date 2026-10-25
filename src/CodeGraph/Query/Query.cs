@@ -50,34 +50,83 @@ public static class GraphQuery
         _ => 5,
     };
 
-    private static string? Choose(Graph g, string name, TextWriter w)
+    /// <summary>
+    /// The node meant by a name: an exact node id wins, else the best-ranked match. <paramref name="ambiguous"/> gets
+    /// all candidates (best first) when the top two look alike (same rank and name), else stays empty.
+    /// </summary>
+    public static string? Resolve(Graph g, string name, out List<string> ambiguous)
     {
+        ambiguous = [];
+        if (g.HasNode(name.Trim())) return name.Trim();
         var hits = Find(g, name);
-        if (hits.Count == 0)
-        {
-            w.WriteLine($"Nothing matches '{name}'.");
-            return null;
-        }
+        if (hits.Count == 0) return null;
         if (hits.Count > 1)
         {
             hits = hits.OrderBy(h => Rank(g.GetNode(h)!)).ThenBy(h => h.Length).ToList();
             var a = g.GetNode(hits[0])!;
             var b = g.GetNode(hits[1])!;
             if (Rank(a) == Rank(b) && Low(a.Str("name")) == Low(b.Str("name")))
-            {
-                w.WriteLine($"'{name}' matches several things, using the first. Be more specific (use a path or id):");
-                foreach (var h in hits.Take(15)) w.WriteLine("    " + h);
-            }
+                ambiguous = hits;
         }
         return hits[0];
     }
 
-    public static void Show(Graph g, string name, TextWriter w, int limit = 40)
+    private static string? Choose(Graph g, string name, TextWriter w)
+    {
+        var nid = Resolve(g, name, out var ambiguous);
+        if (nid is null)
+        {
+            w.WriteLine($"Nothing matches '{name}'.");
+            return null;
+        }
+        if (ambiguous.Count > 0)
+        {
+            w.WriteLine($"'{name}' matches several things, using the first. Be more specific (use a path or id):");
+            foreach (var h in ambiguous.Take(15)) w.WriteLine("    " + h);
+        }
+        return nid;
+    }
+
+    /// <summary>The repository a node belongs to: its "repo" attribute, else the second part of its id.</summary>
+    public static string? RepoOf(Node n)
+    {
+        if (!string.IsNullOrEmpty(n.Str("repo"))) return n.Str("repo");
+        var parts = n.Id.Split(':', 3);
+        return parts.Length == 3 && parts[0] is "sym" or "file" or "proj" or "area" ? parts[1] : null;
+    }
+
+    /// <summary>
+    /// Nodes whose name/qual/path/id contains the text (case-insensitive), optionally of one kind and repo. Exact
+    /// matches come first, then by kind rank and id length.
+    /// </summary>
+    public static List<string> Search(Graph g, string text, string? kind = null, string? repo = null)
+    {
+        string low = text.Trim().ToLowerInvariant();
+        var hits = new List<(string Id, bool Exact, int Rank)>();
+        foreach (var n in g.Nodes)
+        {
+            if (!string.IsNullOrEmpty(kind) && !string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!string.IsNullOrEmpty(repo) && !string.Equals(RepoOf(n), repo, StringComparison.OrdinalIgnoreCase)) continue;
+            string[] cands = [Low(n.Str("name")), Low(n.Str("qual")), Low(n.Str("path")), n.Id.ToLowerInvariant()];
+            if (cands.Contains(low)) hits.Add((n.Id, true, Rank(n)));
+            else if (cands.Any(c => c.Length > 0 && c.Contains(low, StringComparison.Ordinal))) hits.Add((n.Id, false, Rank(n)));
+        }
+        return hits.OrderBy(h => h.Exact ? 0 : 1).ThenBy(h => h.Rank).ThenBy(h => h.Id.Length)
+            .ThenBy(h => h.Id, StringComparer.Ordinal).Select(h => h.Id).ToList();
+    }
+
+    /// <summary>
+    /// A node, its attributes and its connections grouped by relation. <paramref name="relation"/> and
+    /// <paramref name="direction"/> ("in", "out" or "both") filter the connections; <paramref name="ids"/> adds each
+    /// neighbour's node id, so a caller can follow it exactly.
+    /// </summary>
+    public static void Show(Graph g, string name, TextWriter w, int limit = 40, string? relation = null,
+        string direction = "both", bool ids = false)
     {
         var nid = Choose(g, name, w);
         if (nid is null) return;
         var n = g.GetNode(nid)!;
-        w.WriteLine(Label(g, nid));
+        w.WriteLine(Label(g, nid) + (ids ? $"  {{{nid}}}" : ""));
         foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "columns", "projects" })
         {
             var val = n.Data[k];
@@ -93,11 +142,16 @@ public static class GraphQuery
         }
         var outg = new Dictionary<string, List<Edge>>();
         var inn = new Dictionary<string, List<Edge>>();
+        bool wantOut = direction is "both" or "out", wantIn = direction is "both" or "in";
         foreach (var e in g.Edges)
         {
-            if (e.Source == nid) (outg.TryGetValue(e.Relation, out var l) ? l : outg[e.Relation] = []).Add(e);
-            else if (e.Target == nid) (inn.TryGetValue(e.Relation, out var l2) ? l2 : inn[e.Relation] = []).Add(e);
+            if (!string.IsNullOrEmpty(relation) && !string.Equals(e.Relation, relation, StringComparison.OrdinalIgnoreCase)) continue;
+            if (e.Source == nid) { if (wantOut) (outg.TryGetValue(e.Relation, out var l) ? l : outg[e.Relation] = []).Add(e); }
+            else if (e.Target == nid && wantIn) (inn.TryGetValue(e.Relation, out var l2) ? l2 : inn[e.Relation] = []).Add(e);
         }
+        if (outg.Count == 0 && inn.Count == 0 && (!string.IsNullOrEmpty(relation) || direction != "both"))
+            w.WriteLine($"\nNo {(string.IsNullOrEmpty(relation) ? "" : relation + " ")}connections" +
+                        (direction != "both" ? $" ({direction})." : "."));
         foreach (var (title, groups, takeSource) in new[] { ("Outgoing", outg, false), ("Incoming", inn, true) })
         {
             if (groups.Count > 0) w.WriteLine($"\n{title}:");
@@ -110,7 +164,9 @@ public static class GraphQuery
                     string extra = e.Count > 1 ? $"  x{e.Count}" : "";
                     if (!string.IsNullOrEmpty(e.Str("via"))) extra += $"  via {e.Str("via")}";
                     if (!string.IsNullOrEmpty(e.Str("version"))) extra += $"  v{e.Str("version")}";
-                    w.WriteLine($"     {Label(g, takeSource ? e.Source : e.Target)}{extra}");
+                    string other = takeSource ? e.Source : e.Target;
+                    if (ids) extra += $"  {{{other}}}";
+                    w.WriteLine($"     {Label(g, other)}{extra}");
                 }
                 if (es.Count > limit) w.WriteLine($"     ... {es.Count - limit} more");
             }
@@ -246,5 +302,41 @@ public static class GraphQuery
             string arrow = d == "->" ? $"--{rel}-->" : $"<--{rel}--";
             w.WriteLine($"  {arrow} {Label(g, c)}");
         }
+    }
+
+    /// <summary>
+    /// The source lines of a symbol, DB object or file (read from the repo on disk), with
+    /// <paramref name="context"/> extra lines around a definition and at most <paramref name="maxLines"/> lines.
+    /// </summary>
+    public static void Source(Graph g, string name, TextWriter w, int context = 0, int maxLines = 200)
+    {
+        var nid = Choose(g, name, w);
+        if (nid is null) return;
+        var n = g.GetNode(nid)!;
+        bool isFile = n.Kind == "file";
+        var fn = isFile ? n : g.GetNode(n.Str("file") ?? "");
+        string? repoPath = fn is null ? null : g.GetNode("repo:" + fn.Str("repo"))?.Str("path");
+        if (fn is null || string.IsNullOrEmpty(repoPath) || string.IsNullOrEmpty(fn.Str("path")))
+        {
+            w.WriteLine($"{Label(g, nid)} has no source location.");
+            return;
+        }
+        string full = System.IO.Path.Combine(repoPath, fn.Str("path")!.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        if (!File.Exists(full))
+        {
+            w.WriteLine($"File not found: {full}");
+            return;
+        }
+        var lines = CodeGraph.Text.SourceText.Read(full).Split('\n');
+        if (lines.Length > 1 && lines[^1].Length == 0) lines = lines[..^1];
+        int start = isFile ? 1 : n.Int("line") ?? 1;
+        int end = isFile ? lines.Length : start + Math.Max(1, n.Int("lines") ?? 1) - 1;
+        int from = Math.Max(1, start - (isFile ? 0 : context));
+        int to = Math.Min(lines.Length, end + (isFile ? 0 : context));
+        int shownTo = Math.Min(to, from + maxLines - 1);
+        w.WriteLine($"{Label(g, nid)}\n{full}:{from}-{shownTo}");
+        for (int i = from; i <= shownTo; i++)
+            w.WriteLine($"{i,6}  {lines[i - 1].TrimEnd('\r')}");
+        if (shownTo < to) w.WriteLine($"   ... {to - shownTo} more lines");
     }
 }

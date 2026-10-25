@@ -66,6 +66,65 @@ public class QueryTests
     }
 
     [Fact]
+    public void Exact_ids_win_and_ambiguity_is_reported()
+    {
+        var g = SampleGraph.Create();
+        g.Node("db:other.Orders", ("kind", "db_table"), ("name", "Orders"));
+        Assert.Equal("db:other.Orders", GraphQuery.Resolve(g, "db:other.Orders", out var none));
+        Assert.Empty(none);
+        Assert.Equal("db:Orders", GraphQuery.Resolve(g, "Orders", out var amb));
+        Assert.Equal(["db:Orders", "db:other.Orders"], amb);
+        Assert.Null(GraphQuery.Resolve(g, "zzz", out _));
+    }
+
+    [Fact]
+    public void Search_puts_exact_matches_first_and_filters_kind_and_repo()
+    {
+        var g = SampleGraph.Create();
+        Assert.Equal([SampleGraph.Save], GraphQuery.Search(g, "save", kind: "sub"));
+        Assert.Equal("db:usp_Save", GraphQuery.Search(g, "usp_save")[0]);
+        Assert.Equal([SampleGraph.TMod, SampleGraph.FDb, SampleGraph.Load],
+            GraphQuery.Search(g, "moddb", repo: "shop"));
+        Assert.Empty(GraphQuery.Search(g, "orders", repo: "Shop"));
+    }
+
+    [Fact]
+    public void Show_filters_by_relation_and_direction_and_prints_ids()
+    {
+        var g = SampleGraph.Create();
+        var text = Run(w => GraphQuery.Show(g, "frmMain.Save", w, relation: "writes", direction: "out", ids: true));
+        Assert.Equal(
+            $"frmMain.Save (sub)  [Sales/frmMain.frm:10]  {{{SampleGraph.Save}}}\n" +
+            "  lines: 5\n  signature: Private Sub Save()\n" +
+            "\nOutgoing:\n" +
+            "  writes (1):\n" +
+            "     Orders (db_table)  x2  {db:Orders}\n", text);
+        Assert.Contains("No calls connections (in).", Run(w => GraphQuery.Show(g, "frmMain.Save", w, relation: "calls", direction: "in")));
+    }
+
+    [Fact]
+    public void Source_prints_a_definition_with_context()
+    {
+        string dir = Directory.CreateTempSubdirectory("cg-src").FullName;
+        try
+        {
+            Directory.CreateDirectory(System.IO.Path.Combine(dir, "Sales"));
+            File.WriteAllText(System.IO.Path.Combine(dir, "Sales", "frmMain.frm"),
+                string.Join("\r\n", Enumerable.Range(1, 20).Select(i => $"line {i}")) + "\r\n");
+            var g = SampleGraph.Create();
+            g.Node("repo:Shop", ("path", dir));
+            var text = Run(w => GraphQuery.Source(g, SampleGraph.Save, w, context: 1));
+            var lines = text.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            Assert.EndsWith(":9-15", lines[1]);
+            Assert.Equal(["     9  line 9", "    10  line 10", "    15  line 15"], [lines[2], lines[3], lines[^1]]);
+            var file = Run(w => GraphQuery.Source(g, "Sales/frmMain.frm", w, maxLines: 3));
+            Assert.Contains("     3  line 3\n   ... 17 more lines\n", file);
+            Assert.Contains("has no source location", Run(w => GraphQuery.Source(g, "usp_Save", w)));
+        }
+        finally { Directory.Delete(dir, true); }
+    }
+
+    [Fact]
     public void Impact_groups_affected_things_by_project()
     {
         var text = Run(w => GraphQuery.Impact(SampleGraph.Create(), "Orders", w));
