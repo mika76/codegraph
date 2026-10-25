@@ -9,6 +9,16 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### ✨ Added
+- 🤖 **MCP server**: `codegraph mcp` serves the graph to AI assistants (Claude Code, Cursor, VS Code, ...) over
+  stdio, with read-only tools `search`, `show` (filter by relation and direction), `impact`, `path`, `source`
+  (a definition's code with line numbers) and `report`. Results carry node ids. An ambiguous name returns its
+  candidates instead of a guess, and the graph is reloaded after each `codegraph build`. Setup is in
+  `docs/agents.md`.
+
+### 🔄 Changed
+- 🎯 A node id given as a name now always picks that node, even when other nodes share its name.
+
 ### 🐛 Fixed
 - 🔧 C++ projects take their output file from the linker settings - `/out:` in `.dsp`, the linker's `OutputFile` in
   `.vcproj` and `.vcxproj` (or `TargetName` + `TargetExt`), Release configuration first. An ActiveX control linked as

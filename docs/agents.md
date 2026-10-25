@@ -11,7 +11,8 @@ numbers to check. The agent then reads only the few files that matter.
 
 ## How an agent should use it
 
-1. **Ask the graph first** (from the folder with `codegraph.json`):
+1. **Ask the graph first**, through the [MCP server](#mcp-server-the-graph-as-tools) when it is set up, otherwise
+   with the command line (from the folder with `codegraph.json`):
 
    | Question | Command |
    |---|---|
@@ -28,6 +29,51 @@ numbers to check. The agent then reads only the few files that matter.
 3. **Mention the blind spots** when they matter: calls through untyped variables (VB6 `Object`/`Variant`, late
    binding, reflection), SQL or URLs assembled at runtime, and anything ambiguous (skipped, never guessed).
 4. **Rebuild after changing code**: `codegraph build` takes a few seconds when little changed.
+
+## MCP server: the graph as tools
+
+`codegraph mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any MCP client (Claude
+Code, Claude Desktop, Cursor, VS Code / Copilot, Codex, Gemini CLI, ...) can then query the graph through tools
+instead of running the executable and reading its output. The client starts the server and talks to it over
+stdin/stdout. Nothing listens on the network, and the server only reads: the graph, the report, and the source
+files that the `source` tool shows.
+
+| Tool | Arguments | Returns |
+|---|---|---|
+| `search` | `query`, `kind?`, `repo?`, `limit?` | matching nodes with their ids: exact matches first, then names starting with the text |
+| `show` | `name`, `relation?`, `direction?` (`in`/`out`/`both`), `limit?` | the node and its connections, each with the neighbour's id; e.g. who writes a table: `relation=writes, direction=in` |
+| `impact` | `name`, `depth?` | everything that depends on it, grouped by project and file |
+| `path` | `from`, `to` | the shortest chain connecting two nodes |
+| `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
+| `report` | - | `GRAPH_REPORT.md` |
+
+Every `name` can also be a node id; ids are printed in `{braces}`. A name that matches several things returns the
+candidates with their ids instead of guessing, and the agent calls again with the id it means. The server loads
+`graph.json` on first use and loads it again after a `codegraph build`, so it never has to be restarted. Output
+longer than 40,000 characters is cut, with a hint to narrow the query.
+
+Register it with Claude Code. The config path tells the server where the graph is, and `--scope user` makes it
+available in every session, whatever folder it starts in:
+
+```powershell
+claude mcp add codegraph --scope user -- C:\src\codegraph\publish\codegraph.exe mcp --config C:\src\codegraph\codegraph.json
+```
+
+Other clients take the same command in their MCP settings, usually as JSON like this (`.mcp.json` for a project in
+Claude Code, `.cursor/mcp.json` in Cursor, `.vscode/mcp.json` with `"servers"` in VS Code):
+
+```json
+{
+  "mcpServers": {
+    "codegraph": {
+      "command": "C:\\src\\codegraph\\publish\\codegraph.exe",
+      "args": ["mcp", "--config", "C:\\src\\codegraph\\codegraph.json"]
+    }
+  }
+}
+```
+
+The server logs to stderr; the MCP client shows those lines in its server log.
 
 ## Claude Code: the bundled skills
 
@@ -108,8 +154,3 @@ or with `jq`:
 ```bash
 jq -r '.edges[] | select(.target == "db:orders" and .relation == "writes") | .source' codegraph-out/graph.json
 ```
-
-## Coming next
-
-An MCP server over the graph is on the [roadmap](ROADMAP.md): agents will then be able to query it as a tool
-without shelling out to the executable.

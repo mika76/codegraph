@@ -122,6 +122,7 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 | Only the graph and report, no vault | `codegraph build --no-vault` |
 | "What uses X?" / "What breaks if I change X?" | `codegraph show X` / `codegraph impact X [--depth N]` |
 | "How does A reach B?" | `codegraph path A B` |
+| Let an AI assistant query the graph | `codegraph mcp` (started by the MCP client, see the [agents guide](docs/agents.md)) |
 | Cutting a release | `codegraph release-snapshot 2.5` (then edit `releases.json`) |
 
 ### With AI coding agents
@@ -129,6 +130,9 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 This is where codegraph shines: instead of grepping repo by repo, an agent (Claude Code, Cursor, Copilot, Codex,
 ...) asks the graph "what breaks if I change X?" and gets every caller and app with `file:line` to check.
 
+- **Any MCP client** (Claude Code, Cursor, VS Code, ...): `codegraph mcp` serves the graph as tools - `search`,
+  `show`, `impact`, `path`, `source`, `report`. Register it once, e.g.
+  `claude mcp add codegraph --scope user -- C:\src\codegraph\publish\codegraph.exe mcp --config C:\src\codegraph\codegraph.json`.
 - **Claude Code:** `claude-setup\install.ps1` installs three skills: `/graph-ask` (answer "who uses / what breaks"
   questions from the graph, then check the source), `/graph-build` (rebuild and review the report) and
   `/graph-release` (record releases).

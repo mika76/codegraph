@@ -14,9 +14,9 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
 
 ## Next - better answers
 
-- **MCP server over `graph.json`** (M). Let Claude, Cursor and other assistants query the graph directly
-  (`show`, `impact`, `path`, search by name/kind) instead of shelling out and reading text. The biggest win for
-  AI-assisted use.
+- [x] **MCP server over `graph.json`** (built, unreleased). `codegraph mcp` lets Claude, Cursor and other
+  assistants query the graph directly (`search`, `show`, `impact`, `path`, `source`) instead of shelling out and
+  reading text. See the [agents guide](agents.md#mcp-server-the-graph-as-tools).
 - **Link more of what's there** (M-L). A typical first run resolves about a third of all references. Targets:
   - URLs built at runtime: follow simple string concatenation and constants
     (`baseUrl + '/orders/' + id`, jsonp helpers), so more front-end calls reach their API action.

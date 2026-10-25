@@ -40,7 +40,7 @@ Obsidian vault.
 | **Analysis** | communities (Leiden/Louvain), most-connected "god nodes", "surprising connections" | report: unused DB objects, orphan files, missing project members, procs called but not found |
 | **Uncertain links** | every edge tagged `EXTRACTED` or `INFERRED` | ambiguous matches are skipped, never guessed |
 | **Browsing** | interactive HTML (aggregates above 5,000 nodes), wiki, Neo4j | Obsidian vault where your own notes link into the graph |
-| **Queries** | query / path / explain; optional MCP server | show / impact / path; no MCP server yet |
+| **Queries** | query / path / explain; optional MCP server | show / impact / path; MCP server (search, show, impact, path, source) |
 | **Keeping it current** | `--update`, watch mode, git hooks | incremental parse cache (seconds), run on demand |
 | **Your own knowledge** | rationale comments (`# WHY:`) and ADR references become nodes | releases (which module shipped in which version), facts and notes |
 | **Install** | Python 3.10+, uv or pipx | one executable, nothing else |
@@ -51,8 +51,8 @@ Obsidian vault.
 - **Language breadth and accuracy.** Many more languages, parsed with real syntax trees rather than patterns, so
   fewer constructs are missed in the languages it supports.
 - **Documents alongside code.** Design docs, PDFs, diagrams and recordings end up in the same graph.
-- **Analysis and visuals.** Community detection, "god nodes", an interactive HTML graph, watch mode, git hooks
-  and an MCP server.
+- **Analysis and visuals.** Community detection, "god nodes", an interactive HTML graph, watch mode and git
+  hooks.
 - **Ecosystem.** Works with many assistants and has an active community.
 
 ## Where codegraph is the better choice
@@ -73,13 +73,13 @@ Obsidian vault.
 - Pattern-based parsing: calls through untyped variables (VB6 late binding, reflection) and URLs or SQL built at
   runtime are not followed. A typical first run resolves around a third of all references - the rest are mostly
   framework calls and local variables, but some real links are missed.
-- No clustering, HTML viewer, MCP server or watch mode (yet).
+- No clustering, HTML viewer or watch mode (yet).
 
 ## Using both
 
 They don't get in each other's way. graphify can cover documents and the modern parts of a system with its
 visual graph; codegraph covers the legacy code, the database and the cross-repo "what breaks if I change this"
-questions. Ideas codegraph may borrow: an MCP server over `graph.json`, and community detection to show app
+questions. An idea codegraph may borrow: community detection to show app
 boundaries in the report.
 
 ## Sources

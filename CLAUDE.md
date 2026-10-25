@@ -8,7 +8,7 @@ Machine- and company-specific context is in `CLAUDE.local.md` (git-ignored) when
 
 Build the exe with `.\publish.ps1` (-> `publish\codegraph.exe`; the native link step needs the VS C++ workload and
 the script puts `vswhere.exe` on PATH). Run: `.\publish\codegraph.exe build [--full] [--no-vault] | show <name> |
-impact <name> [--depth N] | path <a> <b> | release-snapshot <ver> | init`. Without the native toolchain:
+impact <name> [--depth N] | path <a> <b> | mcp | release-snapshot <ver> | init`. Without the native toolchain:
 `dotnet run --project src\CodeGraph -c Release -- <command>`.
 Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.json`, `knowledge.json`,
 `proc_prefixes`). These three files are the user's own and git-ignored; `codegraph init` writes the examples from
@@ -58,7 +58,10 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
 - `Model/Graph.cs` - nodes/edges whose attributes are `JsonObject`s (written as-is to graph.json).
 - `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes, release-snapshot),
   `Output/Views.cs` (rollups for output), `Output/Obsidian.cs` (vault; manifest-based sync, only rewrites changed
-  notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path).
+  notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path/search/source).
+- `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
+  tools search/show/impact/path/source/report wrap `GraphQuery`; reloads graph.json when its mtime changes.
+  stdout is protocol only - log to stderr.
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
 `db:<object>`, `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
@@ -78,5 +81,5 @@ executes, references (FK), triggers_on, defines/alters, depends_on, uses_library
 ## Known gaps / ideas (not done yet)
 - URLs built at runtime (string concatenation, jsonp helpers) are not matched to API routes. VB6 late binding
   (Object/Variant) is not followed. CI runs the tests on Windows, Linux and macOS, but real use is on Windows.
-- Possible next steps: MCP server over graph.json; compare two releases as a diff report; per-release change lists
+- Possible next steps: compare two releases as a diff report; per-release change lists
   from git; HTML viewer.
