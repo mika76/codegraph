@@ -77,7 +77,14 @@ public static class GraphQuery
             if (!wildcard && Rank(g.GetNode(ranked[0])!) < Rank(g.GetNode(ranked[1])!)) return new(ranked[0], [], []);
             return new(null, ranked, []);
         }
-        return new(null, [], wildcard ? [] : Search(g, n).Take(5).ToList());
+        if (wildcard) return new(null, [], []);
+        // closest: names containing the text; ids and paths containing it (every symbol of a matching file) only
+        // when no name does
+        var near = Search(g, n);
+        string lowName = n.ToLowerInvariant();
+        var byName = near.Where(h => g.GetNode(h) is { } x && (Low(x.Str("name")).Contains(lowName, StringComparison.Ordinal)
+                                                               || Low(x.Str("qual")).Contains(lowName, StringComparison.Ordinal))).ToList();
+        return new(null, [], (byName.Count > 0 ? byName : near).Take(5).ToList());
     }
 
     /// <summary>Why a name picked no node, with the candidates' labels and ids; null when it picked one.</summary>

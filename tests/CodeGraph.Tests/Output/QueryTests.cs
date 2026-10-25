@@ -23,6 +23,12 @@ public class QueryTests
         Assert.Null(partial.Id);
         Assert.Equal(["db:Unused"], partial.Near);                                          // offered, not picked
         Assert.Empty(GraphQuery.Resolve(g, "zzz").Near);
+        // things whose name contains the text are offered; one that only has it in its id (a symbol of that file) is not
+        g.Node("sym:Shop:Sales/frmMain.frm#frmMain.Helper", ("kind", "sub"), ("name", "Helper"), ("qual", "Helper"));
+        var near = GraphQuery.Resolve(g, "frmMai").Near;
+        Assert.Contains(SampleGraph.TForm, near);
+        Assert.Contains(SampleGraph.FMain, near);
+        Assert.DoesNotContain("sym:Shop:Sales/frmMain.frm#frmMain.Helper", near);
     }
 
     [Fact]
