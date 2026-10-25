@@ -48,8 +48,8 @@ files that the `source` tool shows.
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
 
 `search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
-`{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:award*`,
-`*SlotShort*`). A name that matches several things or nothing returns the candidates with their ids, and the agent
+`{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:order*`,
+`*OrderLine*`). A name that matches several things or nothing returns the candidates with their ids, and the agent
 calls again with the id it means. The server loads
 `graph.json` on first use and loads it again after a `codegraph build`, so it never has to be restarted. Output
 longer than 40,000 characters is cut, with a hint to narrow the query.
@@ -130,7 +130,7 @@ It has three parts:
 
 ```jsonc
 {
-  "meta":  { "generated": "...", "repos": [...], "stats": {...}, "unresolved": {...} },
+  "meta":  { "generated": "...", "repos": [...], "stats": {...}, "unresolved": {...}, "unresolved_at": {...} },
   "nodes": [ { "id": "db:orders", "kind": "db_table", "name": "Orders", "file": "file:Shop:Database/Tables/dbo.Orders.sql", "line": 1, ... } ],
   "edges": [ { "source": "sym:Shop:OrderEntry/frmOrder.frm#frmOrder.cmdPlace_Click", "target": "db:orders", "relation": "reads", "count": 2, "line": 41 } ]
 }
@@ -138,7 +138,11 @@ It has three parts:
 
 - **Node ids**: `repo:<name>`, `area:<repo>:<top folder>`, `proj:<repo>:<project file>`, `sln:<repo>:<file>`,
   `file:<repo>:<path>`, `sym:<repo>:<path>#<Type>.<Member>`, `db:<object>` (lower case, without `dbo.`),
-  `ext:<library>`, `rel:<version>`, `concept:<name>`.
+  `ext:<library>`, `rel:<version>`, `concept:<name>`, `item:<kind>:<name>` and `fileref:<name>` (your own file
+  formats).
+- **Meta**: `stats` (counts, `refs_total` / `refs_resolved`), `unresolved` (names that matched nothing, by kind:
+  `exec:<proc>`, `db:<object>`, `api:<VERB /route>`, ...) and `unresolved_at` (where each missing procedure was first
+  called, `Repo: path:line`).
 - **Common node fields**: `kind`, `name`, `repo`, `path` (files, projects), `file` + `line` (symbols, DB objects),
   `lang`, `signature`, `projects` (files: the projects that build them), `routes` (controller actions).
 - **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `calls_native`, `includes`,

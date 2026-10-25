@@ -130,7 +130,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
 
     private const string NameHelp =
         "Node id (from search, shown in {braces}), exact name, qualified name or path; use * as a wildcard " +
-        "(e.g. db:award*, *SlotShort*). Several matches or none return the candidates with their ids.";
+        "(e.g. db:order*, *OrderLine*). Several matches or none return the candidates with their ids.";
 
     private static JsonArray Tools() => new(
     [

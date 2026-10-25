@@ -237,14 +237,17 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
   external libraries and packages
 - routine → routine calls, `New` / instantiation, inheritance, type usage; C# calls through an interface also link
   to the implementing class
-- code → database: SQL inline in VB6/C#/PowerShell/JS strings, stored-procedure names in strings, ADO recordsets
-  that `.Update`/`.AddNew`
+- code → database: SQL inline in VB6/C#/PowerShell/JS strings, stored-procedure names in strings (where the code
+  uses a database API - ADO, ADO.NET, Entity Framework, ODBC, `sqlcmd` - or the name has one of your
+  `proc_prefixes`; column names like `rs.Fields("x")` are not calls), ADO recordsets that `.Update`/`.AddNew`
 - stored procedure / view / function / trigger → the tables they read, write and execute; table → table foreign keys
 - VB6 `Declare ... Lib "X.dll"` → the function in your own X.dll project
 - TS/JS/Vue: imports (relative, `@/`, tsconfig `paths`, lazy `import()`, re-exports), calls through imports,
   components used in `<template>`, imports of your own npm packages into their source
-- front end → back end: `api.get('/orders')`, `fetch`, `$.ajax({url})` in TS/JS/Vue/Razor → the C# controller
-  action serving that route (`[Route]`/`[HttpGet]` attributes or MVC `/Controller/Action`)
+- front end → back end: `api.get('/orders')`, `fetch`, `$.ajax({url})`, or a URL passed to your own wrapper
+  (linked when it matches a route) in TS/JS/Vue/Razor → the C# controller action serving that route
+  (`[Route]`/`[HttpGet]` attributes; a base path like `/api` or `/v1` on either side is allowed); Razor
+  `Url.Action("Edit", "Orders")` → `OrdersController.Edit`
 - MVC: controller action → its view, `@model` types, partials
 - installers: which projects/files and third-party binaries each installer ships, features, services, custom actions
 - releases from git branch names and from `releases.json`
@@ -260,14 +263,17 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 | `output` | where `graph.json`, the report and the parse cache go (default `./codegraph-out`) |
 | `ignore` | extra ignore patterns for all repos |
 | `releases`, `releases_from_branches`, `knowledge` | your own knowledge files (see above) |
-| `proc_prefixes` | your stored procedure name prefixes, e.g. `["sp", "usp"]` |
+| `proc_prefixes` | optional stored procedure name prefixes, e.g. `["sp", "usp"]`: a string with one counts as a procedure name even away from database code (a module of constants), and is reported when no such procedure exists |
 | `extractors` | rules for your own XML/JSON formats (see [Your own file formats](#your-own-file-formats)) |
 | `external_ignore_extra` | library names not to show as external dependencies |
 | `obsidian` | `folder` (sub-folder for generated notes), `max_routines_per_note`, `graph_colors` |
 
-**Ignoring things.** Built in: `bin obj packages node_modules Debug Release .vs`, `Vendor`/`ThirdParty` folders,
-`*.Designer.cs`, `Reference.cs`, vendored `*.min.js`/jQuery etc. Only code file types are read at all (no images,
-docs or binaries). Add patterns in `"ignore"` or in a `.codegraphignore` file in a repo root (an existing
+**Ignoring things.** Built in: `node_modules`, `.vs`, `dist`, `Vendor`/`ThirdParty` folders, `*.Designer.cs`,
+generated WCF `Reference.cs`, `*.min.js` and copies of well-known libraries (`jquery-3.4.1.js`, `vue.runtime.js`, ...).
+Build output is skipped only where a build puts it: `bin`/`obj` next to a project file, `Debug`/`Release`/`x64`/`x86`
+next to a C++ project or solution, NuGet's `packages` next to a solution - so a source folder that happens to be
+called `Release` or a JS monorepo's `packages/` is read. Only code file types are read at all (no images, docs or
+binaries). Add patterns in `"ignore"` or in a `.codegraphignore` file in a repo root (an existing
 `.graphifyignore` is also read). A bare name (`Documentation`) matches any folder/file with that name; a path with
 `/` is matched from the repo root; `**/x` matches anywhere; `!pattern` re-includes.
 

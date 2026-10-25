@@ -43,7 +43,14 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   dsp sqlproj wixproj), Wix (installer, features, shipped files, services), Razor (cshtml), Rust.
   `Text/`: `Scrub` (blank comments/strings, same length, returns string literals), `SqlText` (SQL refs in strings,
   `ObjectKey`), `Routes.Normalize`, `LineIndex`, `SourceText.Read` (UTF-8/UTF-16/1252).
-  Inline SQL in strings and stored-proc names in strings become DB refs everywhere.
+  Inline SQL in strings becomes DB refs everywhere (`EXEC name` only when followed by a call shape; parsers join a
+  routine's string pieces with `SqlText.PieceSeparator`). Identifier-like strings become `literal` refs;
+  `Scan/DbAccess` marks them `X["db"]` when the enclosing routine uses a data-access API (library names only) and
+  `X["column"]` when they read a column (`Fields("x")`, `row["x"]`, passed with a DataRow/reader). The builder links
+  a literal to a proc only if marked db or it has a `proc_prefixes` prefix.
+  **No naming conventions**: never decide by casing, underscores or name shape of the user's code - use language
+  keywords, library/framework APIs and structure. Guesses are "candidates" (`literal`, SQL `x.y(`, endpoints with
+  `X["candidate"]`, lower-case TS types): they link only when they resolve, never count as unresolved.
   `ExtractorParser` reads files matched by an `extractors` rule (XPath / JSON paths -> `X["items"]`, embedded SQL via
   the SQL parser); `Scan/CodeStrings` keeps short code string literals (`X["strings"]`) for `opens` links.
 - `Build/Builder*.cs` - files -> projects (member lists, SDK-style globbing, project refs, merged duplicate project
@@ -54,11 +61,16 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   Resolution rule: candidates must be visible (caller's project + referenced projects); prefer same file, then
   same project; ambiguous matches are skipped, never guessed. DB objects are global (`db:<name>`).
   JS: imports resolved to files (relative, tsconfig paths, `@/`->src, internal npm package entry, re-exports).
-  HTTP: `endpoint` refs matched to controller routes (`calls_api`). C# interface calls also link to implementations.
+  HTTP: `endpoint` refs matched to controller routes (`calls_api`); up to 3 leading fixed segments may be dropped
+  from the call, or from the route when routes of 2+ controllers share that prefix (a real base path). Razor
+  `Url.Action` endpoints (`X["conventional"]`) resolve to `<Ctrl>Controller.<Action>` in the same repo first.
+  C# interface calls also link to implementations.
 - `Model/Graph.cs` - nodes/edges whose attributes are `JsonObject`s (written as-is to graph.json).
 - `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes, release-snapshot),
   `Output/Views.cs` (rollups for output), `Output/Obsidian.cs` (vault; manifest-based sync, only rewrites changed
-  notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path/search/source).
+  notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path/search/source; names resolve
+  exactly - id, name, qual or path, any case - or as a `*` pattern, never by partial match: `GraphQuery.Resolve`).
+  `graph.json` is written to a temp file and swapped in (readers like the MCP server never see a partial file).
 - `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
   tools search/show/impact/path/source/report wrap `GraphQuery`; reloads graph.json when its mtime changes.
   stdout is protocol only - log to stderr.

@@ -71,7 +71,7 @@ Obsidian vault.
 ## codegraph's limits
 
 - Pattern-based parsing: calls through untyped variables (VB6 late binding, reflection) and URLs or SQL built at
-  runtime are not followed. A typical first run resolves around a third of all references - the rest are mostly
+  runtime are not followed. A typical first run resolves around 40% of all references - the rest are mostly
   framework calls and local variables, but some real links are missed.
 - No clustering, HTML viewer or watch mode (yet).
 

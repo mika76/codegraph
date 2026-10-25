@@ -47,7 +47,7 @@ public static class GraphQuery
 
     /// <summary>
     /// The node a name means - never a guess. Without '*' only an exact id, name, qualified name or path counts
-    /// (ignoring case); with '*' the name is a pattern ('db:award*', '*Slot_Short*', 'sym:Api:*#Orders*.Get*').
+    /// (ignoring case); with '*' the name is a pattern ('db:order*', '*Order_Line*', 'sym:Api:*#Orders*.Get*').
     /// Several exact matches of different weight pick the heaviest (a project or table over a file or routine of the
     /// same name - the answer's first line says which); otherwise several matches are ambiguous. With no match the
     /// closest names (containing the text) are returned for the message. Only '*' is special: '?' occurs in URLs.
