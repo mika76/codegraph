@@ -115,6 +115,36 @@ public class DbAccessTests
     }
 
     [Fact]
+    public void Strings_that_read_a_column_are_marked_as_columns()
+    {
+        var vb = Parse("modCount.bas", """
+            Attribute VB_Name = "modCount"
+            Public Sub Load(data As ADODB.Recordset)
+                If data.Fields("BILL_Count_denom").value = 1 Then x = data.Fields.Item("bill_qty")
+                cn.Execute "bill_refresh"
+            End Sub
+            """);
+        Assert.True(vb.Refs.Single(r => r.Name == "bill_count_denom").X.ContainsKey("column"));
+        Assert.True(vb.Refs.Single(r => r.Name == "bill_qty").X.ContainsKey("column"));
+        Assert.False(vb.Refs.Single(r => r.Name == "bill_refresh").X.ContainsKey("column"));
+        var cs = Parse("Repo.cs", """
+            class Repo
+            {
+                void Read(DataRow row, IDataReader rd)
+                {
+                    var a = row["bill_total"];
+                    var b = rd.GetOrdinal("bill_points");
+                    var c = row.Field<int>("bill_qty");
+                    var cmd = new SqlCommand("bill_refresh");
+                }
+            }
+            """);
+        foreach (var col in new[] { "bill_total", "bill_points", "bill_qty" })
+            Assert.True(cs.Refs.Single(r => r.Name == col).X.ContainsKey("column"));
+        Assert.False(cs.Refs.Single(r => r.Name == "bill_refresh").X.ContainsKey("column"));
+    }
+
+    [Fact]
     public void Comments_and_strings_do_not_count_as_database_access()
     {
         var f = Parse("Notes.cs", """

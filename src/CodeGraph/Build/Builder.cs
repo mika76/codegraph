@@ -161,6 +161,14 @@ public sealed partial class Builder
 
     private readonly Dictionary<string, string> _firstSeen = [];
 
+    private HashSet<string>? _columnNames;
+
+    /// <summary>Column names of all tables and views in the graph, lower case ("Id int not null" -> "id").</summary>
+    private HashSet<string> ColumnNames => _columnNames ??= _g.Nodes
+        .Where(n => n.Kind.StartsWith("db_", StringComparison.Ordinal) && n.Data["columns"] is JsonArray)
+        .SelectMany(n => ((JsonArray)n.Data["columns"]!).Select(c => (c?.ToString() ?? "").Trim().Split((char[]?)null, 2)[0].Trim('[', ']')))
+        .Where(c => c.Length > 0).Select(c => c.ToLowerInvariant()).ToHashSet();
+
     /// <summary>Count a name that matched nothing and remember where it was first seen ("Repo: path:line").</summary>
     private void Unresolved(string key, string fid, int line)
     {
@@ -789,6 +797,8 @@ public sealed partial class Builder
             }
             case "literal":
             {
+                // rs.Fields("x") / row["x"] reads a column (DbAccess marks it)
+                if (rf.Extra?["column"] is not null) return false;
                 // 'schema.name' must match exactly: "config.save" is no call to some procedure named save
                 string? tgt = name.Contains('.') ? _db.GetValueOrDefault(SqlText.ObjectKey(name)) : DbLookup(name);
                 // a bare string is a call only next to database access (DbAccess marks it) or with a configured
@@ -798,7 +808,8 @@ public sealed partial class Builder
                 bool prefixed = _procPrefixes.Any(p => shortName.Length > p.Length && shortName.StartsWith(p, StringComparison.OrdinalIgnoreCase));
                 if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && (prefixed || rf.Extra?["db"] is not null))
                     return Edge(caller, tgt, "executes", lineAttr, ("via", "name in string"));
-                if (tgt is null && prefixed)
+                // a missing procedure, unless it is the name of a known column (GetValue(row, "x") in your own helper)
+                if (tgt is null && prefixed && !ColumnNames.Contains(shortName))
                     Unresolved("exec:" + name, fid, rf.Line);
                 return false;
             }

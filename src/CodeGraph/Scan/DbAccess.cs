@@ -31,10 +31,24 @@ public static partial class DbAccess
     [GeneratedRegex(@"\.Execute\b", RegexOptions.IgnoreCase)]
     private static partial Regex ExecuteMember();
 
+    /// <summary>
+    /// A string used to read a column: ADO / DataRow / DataReader accessors (Fields("x"), Item("x"), GetOrdinal("x"),
+    /// Field&lt;T&gt;("x"), IsDBNull("x")) or a string indexer (row["x"]). Library APIs only.
+    /// </summary>
+    [GeneratedRegex("""(?:\b(?:Fields|Item|GetOrdinal|IsDBNull|Field\s*<[^<>()]*>)\s*\(\s*|\[\s*)["']([^"'\r\n]+)["']\s*[\])]""", RegexOptions.IgnoreCase)]
+    private static partial Regex ColumnAccess();
+
     public static void Mark(string fileName, string text, FileFacts facts)
     {
         var literals = facts.Refs.Where(r => r.Kind == "literal").ToList();
         if (literals.Count == 0) return;
+        // a column name is no procedure call, whatever its prefix
+        var textLines = new LineIndex(text);
+        var columns = ColumnAccess().Matches(text)
+            .Select(m => (Line: textLines.Line(m.Index), Key: SqlText.LiteralIdentifier(m.Groups[1].Value)))
+            .Where(c => c.Key is not null).ToHashSet();
+        foreach (var r in literals)
+            if (columns.Contains((r.Line, r.Name))) r.X["column"] = true;
         (string code, bool execute) = Path.GetExtension(fileName).ToLowerInvariant() switch
         {
             ".frm" or ".bas" or ".cls" or ".ctl" or ".dsr" or ".pag" or ".dob" => (Scrub.Vb(text).Code, true),
