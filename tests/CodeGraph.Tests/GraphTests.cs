@@ -42,6 +42,24 @@ public class GraphTests
     }
 
     [Fact]
+    public void Saving_replaces_a_graph_that_is_being_read()
+    {
+        string path = Path.Combine(Directory.CreateTempSubdirectory().FullName, "graph.json");
+        var g = new G();
+        g.Node("a", ("kind", "file"), ("name", "A"));
+        g.Save(path);
+        // a reader that opened it the way Load does (e.g. an MCP server) doesn't block the next build
+        using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+        {
+            g.Node("b", ("kind", "file"), ("name", "B"));
+            g.Save(path);
+        }
+        Assert.Equal(["a", "b"], G.Load(path).Nodes.Select(n => n.Id));
+        Assert.False(File.Exists(path + ".tmp"));
+        Assert.False(File.Exists(path + ".old"));
+    }
+
+    [Fact]
     public void RemoveNode_drops_its_edges()
     {
         var g = new G();

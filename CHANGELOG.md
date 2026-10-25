@@ -32,6 +32,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 💾 `build` no longer crashes when another program has `graph.json` open (e.g. a running `codegraph mcp`): the
+  new graph is written next to it and swapped in, so readers never see a half-written file. If the file is
+  locked for good, the build says so instead of printing a stack trace.
 - 📂 Built-in ignores no longer skip your own code that merely looks like build output or a library:
   `bin`/`obj` are only skipped next to a project file, `Debug`/`Release`/`x64`/`x86` next to a C++ project or
   solution, and `packages` next to a solution (a JS monorepo's `packages/` is read now). Library copies are matched

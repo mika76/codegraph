@@ -145,7 +145,37 @@ public sealed class Graph
         return idx;
     }
 
+    /// <summary>
+    /// Write graph.json to a temporary file and swap it in, so a reader (e.g. a running MCP server) never sees a
+    /// half-written graph. A target locked by another program is retried briefly, then reported.
+    /// </summary>
     public void Save(string path)
+    {
+        string tmp = path + ".tmp", old = path + ".old";
+        WriteTo(tmp);
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                // Windows can't overwrite a file that is open, even for a reader that allows it, but it can rename it
+                if (File.Exists(path)) File.Move(path, old, overwrite: true);
+                File.Move(tmp, path);
+                try { File.Delete(old); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+                return;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == 10)
+                {
+                    File.Delete(tmp);
+                    throw new CodeGraphException($"Could not replace {path}: {ex.Message} Close the program that has it open and build again.");
+                }
+                Thread.Sleep(200 * attempt);
+            }
+        }
+    }
+
+    private void WriteTo(string path)
     {
         using var fs = File.Create(path);
         using var w = new Utf8JsonWriter(fs, new JsonWriterOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
@@ -163,7 +193,8 @@ public sealed class Graph
 
     public static Graph Load(string path)
     {
-        using var fs = File.OpenRead(path);
+        // let a build swap in a new graph.json while this one is being read
+        using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
         var root = JsonNode.Parse(fs)!.AsObject();
         var g = new Graph { Meta = root["meta"]?.AsObject() is { } m ? (JsonObject)m.DeepClone() : [] };
         foreach (var item in root["nodes"]!.AsArray())
