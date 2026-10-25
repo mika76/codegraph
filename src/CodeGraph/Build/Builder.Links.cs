@@ -215,6 +215,77 @@ public sealed partial class Builder
         return null;
     }
 
+    /// <summary>Repo -> client-side routes: (normalised path segments, route node id, route name).</summary>
+    private readonly Dictionary<string, List<(string[] Segs, string Id, string? Name)>> _clientRoutes = [];
+
+    /// <summary>
+    /// Client-side route tables (Vue Router ...): a node per route (route:&lt;repo&gt;:&lt;path&gt;) that routes_to its
+    /// component, is contained in its parent route and redirects_to its redirect target.
+    /// </summary>
+    private void ClientRoutes()
+    {
+        var tables = _records.Where(r => r.Facts.Extra?["routes_table"] is JsonArray && _g.HasNode(r.Id)).ToList();
+        foreach (var r in tables)
+        {
+            var list = GetOrAdd(_clientRoutes, r.Repo);
+            foreach (var o in ((JsonArray)r.Facts.Extra!["routes_table"]!).OfType<JsonObject>())
+            {
+                string path = XStr(o, "path") ?? "/";
+                string id = $"route:{r.Repo}:{path}";
+                _g.Node(id, ("kind", "route"), ("name", path), ("route_name", XStr(o, "name")), ("meta", o["meta"]?.DeepClone()),
+                    ("repo", r.Repo), ("file", r.Id), ("line", o["line"]?.DeepClone()));
+                _g.AddEdge(r.Id, id, "defines");
+                string norm = CodeGraph.Text.Routes.Normalize(path);
+                list.Add((norm.Length > 0 ? norm.Split('/') : [], id, XStr(o, "name")));
+                string? target = null;
+                if (XStr(o, "component") is { } comp && _jsImports.GetValueOrDefault(r.Id)?.GetValueOrDefault(comp.ToLowerInvariant()) is var (file, imported) && file is not null)
+                    target = JsSymbol(file, imported) ?? file;
+                else if (XStr(o, "lazy") is { } spec && ResolveSpec(r.Abs, spec) is { } lazyFile)
+                    target = JsSymbol(lazyFile, "default") ?? lazyFile;
+                if (target is not null) _g.AddEdge(id, target, "routes_to");
+            }
+        }
+        foreach (var r in tables)
+            foreach (var o in ((JsonArray)r.Facts.Extra!["routes_table"]!).OfType<JsonObject>())
+            {
+                string id = $"route:{r.Repo}:{XStr(o, "path") ?? "/"}";
+                if (XStr(o, "parent") is { } parent && _g.HasNode($"route:{r.Repo}:{parent}"))
+                    _g.AddEdge($"route:{r.Repo}:{parent}", id, "contains");
+                if (RouteTarget(r.Repo, XStr(o, "redirect"), XStr(o, "redirect_name")) is { } to && to != id)
+                    _g.AddEdge(id, to, "redirects_to");
+            }
+    }
+
+    /// <summary>The route of a repo a path or route name means: by name, else the best path match (literal segments
+    /// first, `:param` matching anything); none when several match equally well.</summary>
+    private string? RouteTarget(string repo, string? path, string? name)
+    {
+        if (_clientRoutes.GetValueOrDefault(repo) is not { } list) return null;
+        if (name is not null)
+        {
+            var named = list.Where(x => x.Name == name).Select(x => x.Id).Distinct().ToList();
+            return named.Count == 1 ? named[0] : null;
+        }
+        if (path is null) return null;
+        string norm = CodeGraph.Text.Routes.Normalize(path);
+        string[] segs = norm.Length > 0 ? norm.Split('/') : [];
+        var best = new List<string>();
+        int bestScore = -1;
+        foreach (var (rs, id, _) in list)
+        {
+            if (rs.Length != segs.Length) continue;
+            int score = 0;
+            bool ok = true;
+            for (int i = 0; i < segs.Length && ok; i++)
+                if (rs[i] == segs[i]) score += 2;
+                else if (rs[i] != "{}" && segs[i] != "{}") ok = false;
+            if (!ok) continue;
+            if (score > bestScore) { best = [id]; bestScore = score; }
+            else if (score == bestScore && !best.Contains(id)) best.Add(id);
+        }
+        return best.Count == 1 ? best[0] : null;
+    }
+
     /// <summary>HTTP routes served by controller actions.</summary>
     private void RouteIndex()
     {

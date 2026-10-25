@@ -11,7 +11,7 @@ public static class GraphQuery
         "calls", "instantiates", "uses_type", "inherits", "calls_native", "includes", "mentions", "reads",
         "imports", "uses_component", "ships", "calls_api", "renders",
         "writes", "executes", "references", "triggers_on", "depends_on", "uses_code_of", "alters", "opens",
-        "implements", "overrides",
+        "implements", "overrides", "routes_to",
     ];
 
     private static string Low(string? s) => (s ?? "").ToLowerInvariant();

@@ -139,7 +139,8 @@ It has three parts:
 - **Node ids**: `repo:<name>`, `area:<repo>:<top folder>`, `proj:<repo>:<project file>`, `sln:<repo>:<file>`,
   `file:<repo>:<path>`, `sym:<repo>:<path>#<Type>.<Member>`, `db:<object>` (lower case, without `dbo.`),
   `ext:<library>`, `rel:<version>`, `concept:<name>`, `col:<table>.<column>` (lower case, kind `column`, named
-  `Table.Column`), `item:<kind>:<name>` and `fileref:<name>` (your own file formats).
+  `Table.Column`), `route:<repo>:<path>` (a client-side route, kind `route`), `item:<kind>:<name>` and
+  `fileref:<name>` (your own file formats).
 - **Meta**: `stats` (counts, `refs_total` / `refs_resolved`), `unresolved` (names that matched nothing, by kind:
   `exec:<proc>`, `db:<object>`, `api:<VERB /route>`, ...) and `unresolved_at` (where each missing procedure was first
   called, `Repo: path:line`).
@@ -148,8 +149,8 @@ It has three parts:
 - **Edge relations**: `contains`, `calls`, `instantiates`, `uses_type`, `inherits`, `calls_native`, `includes`,
   `imports`, `uses_component`, `calls_api`, `renders`, `mentions`, `uses_value` (enum members, constants),
   `reads`, `writes`, `executes`, `references` (foreign key), `triggers_on`, `defines`, `alters`, `depends_on`,
-  `uses_library`, `uses_code_of`, `ships`, `released_in`, `links_to` (a page link to an action - not followed by
-  `impact`), `opens` (a VB6 form shown from code, or one of your
+  `uses_library`, `uses_code_of`, `ships`, `released_in`, `links_to` (a page link to an action or a client route -
+  not followed by `impact`), `routes_to` / `redirects_to` (client routes), `opens` (a VB6 form shown from code, or one of your
   items named in code), and for your own formats `defined_in` and whatever relations your extractors name. `count` is how often it occurs; `line` the first place; `via` extra detail (e.g. `recordset`,
   `implementation`, the raw URL of an API call).
 

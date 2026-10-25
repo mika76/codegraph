@@ -63,6 +63,14 @@ public static partial class JavaScriptParser
     [GeneratedRegex(@"\bfunction\b", O)]
     private static partial Regex FunctionWord();
 
+    /// <summary>`() => import('./x.vue')` - a lazy import.</summary>
+    [GeneratedRegex(@"\(\s*\)\s*=>\s*import\s*\(", O)]
+    private static partial Regex LazyImportArrow();
+
+    /// <summary>A lazy import right at the given position.</summary>
+    [GeneratedRegex(@"\G\s*(?:async\s+)?\(\s*\)\s*=>\s*import\s*\(", O)]
+    private static partial Regex LazyImportAt();
+
     /// <summary>A shorthand method in an object literal - `{ async load(id) {` or `, save() {` - anywhere on a line.</summary>
     [GeneratedRegex($$"""(?<=[{,]\s*)(?:async\s+)?\*?({{Id}})\s*(?:<[^(]*?>)?\s*\([^()]*\)\s*(?::\s*[^{;=]+?)?\{""", O)]
     private static partial Regex ShorthandRe();
@@ -508,6 +516,7 @@ public static partial class JavaScriptParser
         foreach (Match m in PropFuncRe().Matches(code))
         {
             if (InClass(m.Index) || NotFuncs.Contains(m.Groups[1].Value)) continue;
+            if (LazyImportAt().IsMatch(code, code.IndexOf(':', m.Groups[1].Index) + 1)) continue; // component: () => import(...)
             spans.Add(new Span(m.Groups[1].Value, component, m.Groups[1].Index, ExprEnd(code, m.Index + m.Length), hasComponent ? "method" : "function"));
         }
         // factories: a top-level `const useOrders = defineStore('orders', { actions: { load() {} } })` (or any call
@@ -517,7 +526,8 @@ public static partial class JavaScriptParser
             if (depths[m.Index] != 0 || InClass(m.Index) || spans.Any(s => s.Start == m.Groups[1].Index)) continue;
             int pOpen = m.Index + m.Length - 1;
             int pClose = Scrub.MatchBrace(code, pOpen, '(', ')');
-            string args = Sub(code, pOpen, pClose);
+            // a lazy import (() => import('./x.vue')) is no function of the factory
+            string args = LazyImportArrow().Replace(Sub(code, pOpen, pClose), "");
             if (args.Contains("=>", StringComparison.Ordinal) || FunctionWord().IsMatch(args) || ShorthandRe().IsMatch(args))
                 spans.Add(new Span(m.Groups[1].Value, null, m.Groups[1].Index, pClose, "function"));
         }
@@ -691,7 +701,15 @@ public static partial class JavaScriptParser
             if (id != null) refs.Add(new Ref { From = null, Kind = "literal", Name = id, Line = li.Line(s.Offset) });
         }
 
+        // client-side routes and navigation to them
+        foreach (var (at, navPath, navName) in JsRoutes.ScriptLinks(code, text))
+        {
+            var o = Owner(at);
+            refs.Add(JsRoutes.LinkRef(o?.Name, o != null ? o.Value.Parent : component, li.Line(at), navPath, navName));
+        }
+
         var facts = new FileFacts { Lang = lang, Symbols = symbols, Refs = refs, Loc = SourceText.CountLines(text) };
+        if (JsRoutes.Table(code, text, li) is { } routeTable) facts.X["routes_table"] = routeTable;
         facts.X["imports"] = new JsonArray(imports.Select(i =>
         {
             var o = new JsonObject { ["spec"] = i.Spec, ["names"] = NamesJson(i.Names), ["line"] = i.Line };
@@ -770,6 +788,8 @@ public static partial class JavaScriptParser
                     Line = li.Line(tm.Groups[1].Index + m.Index),
                 });
             }
+            foreach (var (at, navPath, navName) in JsRoutes.TemplateLinks(tm.Groups[1].Value))
+                facts.Refs.Add(JsRoutes.LinkRef(null, comp, li.Line(tm.Groups[1].Index + at), navPath, navName));
         }
         facts.Lang = "vue";
         facts.X["script_lang"] = lang;

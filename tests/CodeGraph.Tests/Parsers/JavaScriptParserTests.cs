@@ -127,6 +127,76 @@ public class JavaScriptParserTests
     }
 
     [Fact]
+    public void Router_tables_become_routes()
+    {
+        var f = JavaScriptParser.Parse("src/router/index.ts", """
+            import { createRouter } from 'vue-router'
+            import Shell from '../components/shell.vue'
+            import Orders from '../views/orders.vue'
+            const router = createRouter({
+              routes: [
+                { path: '/login', name: 'login', component: () => import('../views/login.vue'), meta: { requiresAuth: false } },
+                {
+                  path: '/', component: Shell, redirect: { name: 'orders' },
+                  children: [
+                    { path: 'orders', name: 'orders', component: Orders, meta: { requiresAccess: 'Mod_Orders', title: "Orders" } },
+                    { path: 'orders/:id/lines', component: () => import('@/views/lines.vue') },
+                  ],
+                },
+              ],
+            })
+            export default router
+            """);
+        var routes = f.X["routes_table"]!.AsArray().Select(r => r!.AsObject()).ToList();
+        Assert.Equal(["/login", "/", "/orders", "/orders/:id/lines"], routes.Select(r => (string)r["path"]!));
+        var orders = routes.Single(r => (string)r["path"]! == "/orders");
+        Assert.Equal("Orders", (string)orders["component"]!);
+        Assert.Equal("/", (string)orders["parent"]!);
+        Assert.Equal("Mod_Orders", (string)orders["meta"]!["requiresAccess"]!);
+        Assert.Equal("../views/login.vue", (string)routes[0]["lazy"]!);
+        Assert.Equal("orders", (string)routes[1]["redirect_name"]!);
+        // a list of { name, path } objects that is no route table (breadcrumbs) is not taken for routes
+        var crumbs = JavaScriptParser.Parse("src/views/x.vue", "<script setup lang=\"ts\">\nstore.breadcrumbs = [ { name: 'Home', path: '/' }, { name: 'X' } ];\n</script>");
+        Assert.False(crumbs.X.ContainsKey("routes_table"));
+        // a routes variable handed to the router is
+        var viaVar = JavaScriptParser.Parse("src/router.ts", "const routes = [ { path: '/a', component: A } ]\nexport default createRouter({ history, routes })");
+        Assert.Equal("/a", (string)viaVar.X["routes_table"]![0]!["path"]!);
+        // a lazy import is no routine, and a real property function before one is still found
+        Assert.DoesNotContain(f.Symbols, s => s.Name == "component");
+        var g = JavaScriptParser.Parse("src/a.ts", "export const opts = { save: (x) => x + 1, view: () => import('./v.vue') }");
+        Assert.Contains(g.Symbols, s => s.Name == "save");
+        Assert.DoesNotContain(g.Symbols, s => s.Name == "view");
+    }
+
+    [Fact]
+    public void Navigation_in_script_and_template_links_to_routes()
+    {
+        var f = JavaScriptParser.Parse("src/views/orders.vue", """
+            <template>
+              <router-link to="/jackpots">Jackpots</router-link>
+              <RouterLink :to="{ name: 'orders' }">Orders</RouterLink>
+              <router-link :to="item.path">dynamic</router-link>
+            </template>
+            <script setup lang="ts">
+            import { useRouter } from 'vue-router'
+            const router = useRouter()
+            function open(id: number) { router.push(`/orders/${id}/lines`) }
+            function home() { router.replace({ path: '/' }) }
+            </script>
+            """);
+        var links = f.Refs.Where(r => r.Kind == "route_link").ToList();
+        Assert.Contains(links, r => r.Name == "jackpots");
+        Assert.Contains(links, r => r.X["route_name"]?.ToString() == "orders");
+        Assert.Contains(links, r => r is { Name: "orders/{}/lines", From: "open" });
+        Assert.Contains(links, r => r is { Name: "", From: "home" });
+        Assert.Equal(4, links.Count); // :to="item.path" is dynamic: skipped
+        Assert.All(links, r => Assert.True(r.X.ContainsKey("candidate")));
+        // an array push is no navigation when the file doesn't use a router
+        var plain = JavaScriptParser.Parse("src/util.ts", "export function f(a: string[]) { a.push('/x') }");
+        Assert.DoesNotContain(plain.Refs, r => r.Kind == "route_link");
+    }
+
+    [Fact]
     public void Composables_and_stores_own_their_functions()
     {
         var svc = JavaScriptParser.Parse("svc.ts", """

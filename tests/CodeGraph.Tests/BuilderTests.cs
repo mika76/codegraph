@@ -392,6 +392,54 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Client_routes_link_navigation_to_screens()
+    {
+        static FileFacts Js(string rel, string text) => CodeGraph.Parsers.JavaScriptParser.Parse(rel, text);
+        var router = Js("src/router/index.ts", """
+            import { createRouter } from 'vue-router'
+            import Shell from '../components/shell.vue'
+            import Orders from '../views/orders.vue'
+            export default createRouter({ routes: [
+              { path: '/', component: Shell, redirect: { name: 'orders' }, children: [
+                { path: 'orders', name: 'orders', component: Orders, meta: { requiresAccess: 'Mod_Orders' } },
+                { path: 'orders/:id/lines', component: () => import('../views/lines.vue') },
+              ] },
+            ] })
+            """);
+        var shell = Js("src/components/shell.vue", "<template><router-link :to=\"{ name: 'orders' }\">Orders</router-link></template>\n<script setup lang=\"ts\"></script>");
+        var orders = Js("src/views/orders.vue", """
+            <template><div /></template>
+            <script setup lang="ts">
+            import { useRouter } from 'vue-router'
+            const router = useRouter()
+            function open(id: number) { router.push(`/orders/${id}/lines`) }
+            </script>
+            """);
+        var lines = Js("src/views/lines.vue", "<template><div /></template>\n<script setup lang=\"ts\"></script>");
+        var g = Build(Cfg("Web"), Rec("src/router/index.ts", router, "Web", "C:/repos/Web"), Rec("src/components/shell.vue", shell, "Web", "C:/repos/Web"),
+            Rec("src/views/orders.vue", orders, "Web", "C:/repos/Web"), Rec("src/views/lines.vue", lines, "Web", "C:/repos/Web"));
+
+        const string Root = "route:Web:/", OrdersRoute = "route:Web:/orders", LinesRoute = "route:Web:/orders/:id/lines";
+        Assert.Equal("Mod_Orders", g.GetNode(OrdersRoute)!["meta"]!["requiresAccess"]!.ToString());
+        Assert.True(HasEdge(g, OrdersRoute, "sym:Web:src/views/orders.vue#orders", "routes_to"));
+        Assert.True(HasEdge(g, LinesRoute, "sym:Web:src/views/lines.vue#lines", "routes_to"));   // lazy import
+        Assert.True(HasEdge(g, Root, OrdersRoute, "contains"));
+        Assert.True(HasEdge(g, Root, OrdersRoute, "redirects_to"));
+        Assert.True(HasEdge(g, "sym:Web:src/views/orders.vue#orders.open", LinesRoute, "links_to")); // `/orders/${id}/lines`
+        Assert.True(HasEdge(g, "sym:Web:src/components/shell.vue#shell", OrdersRoute, "links_to"));   // { name: 'orders' }
+
+        // "how does the user get to the lines screen?"
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Path(g, "orders.open", "sym:Web:src/views/lines.vue#lines", w);
+        Assert.Contains("--links_to--> /orders/:id/lines (route)", w.ToString());
+        Assert.Contains("--routes_to--> lines (component)", w.ToString());
+        // impact on the lines screen: its route, but not the screens that merely link to it
+        var imp = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "sym:Web:src/views/lines.vue#lines", imp, depth: 3);
+        Assert.DoesNotContain("orders.vue", imp.ToString());
+    }
+
+    [Fact]
     public void Screen_to_api_through_a_store_and_a_composable()
     {
         var svc = CodeGraph.Parsers.JavaScriptParser.Parse("src/svc.ts", """

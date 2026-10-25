@@ -730,6 +730,7 @@ public sealed partial class Builder
     {
         ColumnNodes();
         JsImports();
+        ClientRoutes();
         ViewLinks();
         foreach (var r in _records)
         {
@@ -860,6 +861,12 @@ public sealed partial class Builder
                 };
                 if (rel is null) return false;
                 return Edge(caller, tgt, rel, lineAttr, ("dynamic", rf.Extra?["dynamic"]), ("via", rf.Via));
+            }
+            case "route_link":
+            {
+                // navigation to a client-side route of the same repo: links_to, which impact does not follow
+                string? target = RouteTarget(NodeStr(fid, "repo") ?? "", XStr(rf.Extra, "route_name") is null ? name : null, XStr(rf.Extra, "route_name"));
+                return target is not null && Edge(caller, target, "links_to", lineAttr);
             }
             case "column":
             {

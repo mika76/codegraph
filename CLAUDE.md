@@ -79,7 +79,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   stdout is protocol only - log to stderr.
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,
-`db:<object>`, `col:<table>.<column>` (kind `column`), `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
+`db:<object>`, `col:<table>.<column>` (kind `column`), `route:<repo>:<path>` (client routes, Parsers/JsRoutes.cs), `ext:<lib>`, `rel:<version>`, `concept:`, `item:<kind>:<name>`, `fileref:<name>`. Main edge relations: contains, calls, instantiates,
 uses_type, inherits, calls_native, includes, imports, uses_component, calls_api, renders, mentions, uses_value, reads, writes,
 executes, references (FK), triggers_on, defines/alters, depends_on, uses_library, uses_code_of, ships, released_in.
 
