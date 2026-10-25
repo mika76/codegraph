@@ -268,6 +268,25 @@ public class BuilderTests
         Assert.Null(r.Graph.GetEdge("file:StaffApp:src/api.ts", "sym:Api:Api/InventoryController.cs#InventoryController.Items", "calls_api"));
     }
 
+    [Fact]
+    public void Candidate_api_calls_link_on_a_route_match_and_are_otherwise_silent()
+    {
+        var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };
+        ctl.Symbols[1].X["routes"] = new JsonArray(new JsonObject { ["verb"] = "GET", ["path"] = "inventory/items" });
+        var ts = new FileFacts { Lang = "typescript" };
+        foreach (var path in new[] { "inventory/items", "home/page" })
+        {
+            var r = new Ref { Kind = "endpoint", Name = path, Line = 3 };
+            r.X["candidate"] = true;
+            ts.Refs.Add(r);
+        }
+        var res = Builder.BuildGraph(Cfg("Api", "StaffApp"),
+            [Rec("Api/InventoryController.cs", ctl, "Api", "C:/repos/Api"), Rec("src/api.ts", ts, "StaffApp", "C:/repos/StaffApp")]);
+        Assert.NotNull(res.Graph.GetEdge("file:StaffApp:src/api.ts", "sym:Api:Api/InventoryController.cs#InventoryController.Items", "calls_api"));
+        Assert.DoesNotContain(res.Unresolved.Keys, k => k.StartsWith("api:", StringComparison.Ordinal));
+        Assert.Equal(1, res.Stats["refs_total"]);
+    }
+
     private static BuildResult MatchOne(string called, string route)
     {
         var ctl = new FileFacts { Lang = "csharp", Symbols = [Sym("InventoryController", "class"), Sym("Items", "method", "InventoryController")] };

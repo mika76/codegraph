@@ -660,8 +660,9 @@ public sealed partial class Builder
             var local = _fileSyms.GetValueOrDefault(fid) ?? [];
             foreach (var rf in f.Refs)
             {
-                // candidates - any identifier-like string, any x.y( in SQL - only count once they link to something
-                bool candidate = rf.Kind == "literal" || (rf.Kind == "sql" && rf.Mode == "call");
+                // candidates - any identifier-like string, any x.y( in SQL, a URL given to an unknown function - only
+                // count once they link to something
+                bool candidate = rf.Kind == "literal" || (rf.Kind == "sql" && rf.Mode == "call") || rf.Extra?["candidate"] is not null;
                 // ---- who is calling
                 string caller;
                 if (XStr(rf.Extra, "item") is { } item && _g.HasNode(item))
@@ -726,7 +727,9 @@ public sealed partial class Builder
                 var hits = MatchRoute(verb, name);
                 if (hits.Count == 0)
                 {
-                    Inc(_unresolved, "api:" + ((verb ?? "").ToUpperInvariant() + " /" + name).Trim());
+                    // a URL passed to an unknown function is only a guess: not an "unmatched API call"
+                    if (rf.Extra?["candidate"] is null)
+                        Inc(_unresolved, "api:" + ((verb ?? "").ToUpperInvariant() + " /" + name).Trim());
                     return false;
                 }
                 return EdgeToTargets(caller, hits, "calls_api", lineAttr, ("via", XStr(rf.Extra, "raw")));

@@ -42,6 +42,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   `Reference.cs` is only skipped inside WCF `Service References` folders.
 - 🔤 Upper-case C functions (`INIT_DEVICE`) are found; macros are recognised by their `#define` or by having no
   return type, not by their casing.
+- 🌐 Front-end API calls no longer depend on how functions are named. Calls through well-known HTTP APIs (`fetch`,
+  axios/jQuery verbs, `$.ajax`, `url:` options) count as before. A URL passed to any other function - your own
+  wrapper such as `orders.create('/orders')` - links when it matches a server route, and is not listed as an
+  unmatched call when it doesn't. Router navigation (`router.push`, `navigateTo`, ...) is never an API call, and
+  paths like `/2fa/verify` or `/:id/edit` are recognised.
 - 🔗 Front-end calls match API routes whatever the base path (`/api`, `/v1`, `/backend/api`, or a prefix only the
   server has), not just a leading `/api`.
 - 🌿 More release branch names are understood - `releases/v2.4.1`, `hotfix/2.4.1-rc1`, `R2_4_0`,

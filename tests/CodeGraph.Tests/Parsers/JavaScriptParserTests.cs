@@ -121,7 +121,29 @@ public class JavaScriptParserTests
         Assert.False(eps.Single(r => r.Name == "accounts/{}").X.ContainsKey("verb"));
         Assert.Equal("post", (string)eps.Single(r => r.Name == "home/save").X["verb"]!);
         Assert.DoesNotContain(eps, r => r.Name.Contains("site.css") || r.Name.Contains("view.vue"));
-        Assert.DoesNotContain(eps, r => r.Name == "not/http");
+        // a URL given to an unknown function is a candidate: linked only if a server route matches
+        Assert.True(eps.Single(r => r.Name == "not/http").X.ContainsKey("candidate"));
+        Assert.All(eps.Where(r => r.Name != "not/http"), r => Assert.False(r.X.ContainsKey("candidate")));
+    }
+
+    [Fact]
+    public void Http_calls_through_any_wrapper_but_not_navigation()
+    {
+        const string src = """
+            export function run(orders, router, id) {
+              orders.create('/orders')
+              svc.list(`/stock/${id}/moves`)
+              getTitle('/home/page')
+              client.submit('/2fa/verify')
+              router.push('/orders/new')
+              navigateTo('/reports')
+              format('12/31')
+            }
+            """;
+        var eps = JavaScriptParser.Parse("svc.ts", src).Refs.Where(r => r.Kind == "endpoint").ToList();
+        Assert.Equal(["orders", "stock/{}/moves", "home/page", "2fa/verify"], eps.Select(r => r.Name));
+        Assert.All(eps, r => Assert.True(r.X.ContainsKey("candidate")));
+        Assert.All(eps, r => Assert.False(r.X.ContainsKey("verb")));
     }
 
     [Fact]

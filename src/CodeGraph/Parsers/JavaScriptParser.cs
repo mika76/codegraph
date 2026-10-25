@@ -126,7 +126,9 @@ public static partial class JavaScriptParser
     [GeneratedRegex(@"^(?:\$\{[^}]*\})+", O)]
     private static partial Regex LeadingTemplateExpr();
 
-    [GeneratedRegex(@"^(?:https?://[^/\s]+)?/?[A-Za-z_][\w.\-]*/[\w.\-${}:/]*(?:\?.*)?$|^/[A-Za-z_][\w.\-]*$", O)]
+    // a path of one or more segments; a segment may start with a digit, ':' or '{' (/2fa/verify, /:id/edit) - the
+    // caller also requires a letter somewhere, so 12/31 is no URL
+    [GeneratedRegex(@"^(?:https?://[^/\s]+)?/?[\w:{$][\w.\-${}:]*/[\w.\-${}:/]*(?:\?.*)?$|^/[\w:{$][\w.\-${}:]*$", O)]
     private static partial Regex UrlLike();
 
     [GeneratedRegex(@"\.(vue|js|ts|css|scss|png|svg|jpe?g|gif|html?|json|ico|woff2?|map)$", OI)]
@@ -135,8 +137,9 @@ public static partial class JavaScriptParser
     [GeneratedRegex(@"([\w$]+)\s*(?:<[^<>()]*>)?\s*\(\s*$", O)]
     private static partial Regex CalleeBefore();
 
-    [GeneratedRegex("get|post|put|delete|fetch|request|ajax|json|api|http|load|send|call", O)]
-    private static partial Regex CalleeWords();
+    /// <summary>Router / page navigation (Vue Router, React Router, Nuxt, Next, Angular): a path, not an API call.</summary>
+    private static readonly HashSet<string> NavigationCallees =
+        ["push", "replace", "navigate", "navigateto", "navigatebyurl", "redirect", "resolve", "go", "assign", "prefetch"];
 
     [GeneratedRegex(@"\burl\s*:\s*$", OI)]
     private static partial Regex UrlColon();
@@ -540,14 +543,20 @@ public static partial class JavaScriptParser
             string s_ = lit.Value;
             if (importPos.Contains(pos)) continue;
             string raw = LeadingTemplateExpr().Replace(s_.Trim(), "");
-            if (!UrlLike().IsMatch(raw)) continue;
+            if (!UrlLike().IsMatch(raw) || !raw.Any(char.IsLetter)) continue;
             if (AssetExt().IsMatch(raw.Split('?')[0])) continue;
             string before = Sub(code, pos - 80, pos);
             var cm = CalleeBefore().Match(before);
             string callee = cm.Success ? cm.Groups[1].Value.ToLowerInvariant() : "";
-            bool isHttp = cm.Success && (callee is "get" or "post" or "put" or "delete" or "patch" or "fetch" or "ajax" or "axios"
-                                         or "request" or "jsonp" or "getjson" or "head" or "options" || CalleeWords().IsMatch(callee));
-            if (!isHttp && !UrlColon().IsMatch(before)) continue;
+            // well-known HTTP APIs (fetch, axios / jQuery / fetch-wrapper verbs, $.ajax, { url: }) are calls; a URL
+            // passed to any other function (a wrapper like orders.create('/orders')) is a candidate the builder only
+            // links when it matches a server route. Router navigation is never a call.
+            bool isHttp = cm.Success && callee is "get" or "post" or "put" or "delete" or "patch" or "fetch" or "ajax"
+                or "axios" or "request" or "jsonp" or "getjson" or "head" or "options" or "$fetch" or "usefetch" or "ky";
+            bool urlOption = UrlColon().IsMatch(before);
+            if (cm.Success && NavigationCallees.Contains(callee)) continue;
+            if (!isHttp && !urlOption && !cm.Success) continue;
+            bool candidate = !isHttp && !urlOption;
             string? verb = callee is "get" or "post" or "put" or "delete" or "patch" ? callee : null;
             // The Python tested `type:` against the scrubbed code (strings blanked, so it never matched); use the
             // original text, but only up to the end of the current call so a later call's `type:` doesn't leak in.
@@ -569,6 +578,7 @@ public static partial class JavaScriptParser
             if (r != null)
             {
                 if (verb != null) r.X["verb"] = verb;
+                if (candidate) r.X["candidate"] = true;
                 r.X["raw"] = s_.Length > 120 ? s_[..120] : s_;
                 refs.Add(r);
             }
