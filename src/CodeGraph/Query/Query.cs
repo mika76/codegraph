@@ -344,7 +344,13 @@ public static class GraphQuery
         bool mixed = false;
         if (steps is null)
         {
-            steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []), maxLen);
+            // a chain that changes direction must not pass through hubs: two things in the same release, patch,
+            // installer or project are not connected by that (a hub at either end is fine: rel:2.0 -> what it ships)
+            bool Hub(string from, (string Next, string Rel, string Dir) e) =>
+                from != s && e.Next != t
+                && (e.Rel is "released_in" or "defined_in" or "ships"
+                    || (e.Rel == "contains" && (e.Dir == "->" ? from : e.Next).StartsWith("proj:", StringComparison.Ordinal)));
+            steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []).Where(e => !Hub(n, e)), maxLen);
             mixed = steps is not null;
         }
         if (steps is null)

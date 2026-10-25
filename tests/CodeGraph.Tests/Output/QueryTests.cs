@@ -244,6 +244,21 @@ public class QueryTests
     }
 
     [Fact]
+    public void Mixed_paths_do_not_go_through_releases_or_projects()
+    {
+        var g = PathGraph();
+        g.Node("file:R:x.ts", ("kind", "file"), ("name", "x.ts"), ("path", "x.ts"));
+        g.Node("proj:R:q", ("kind", "project"), ("name", "q"));
+        g.AddEdge("proj:R:q", "rel:1.0", "released_in");
+        g.AddEdge("proj:R:q", "file:R:x.ts", "contains");
+        g.AddEdge("proj:R:p", "file:R:c.ts", "contains");
+        // c.ts and x.ts only share a release (p and q are both in 1.0): no connection
+        Assert.Equal("No connection found within 8 steps.\n", Run(w => GraphQuery.Path(g, "c.ts", "x.ts", w)));
+        // a one-way chain may still go through a project
+        Assert.Contains("--contains--> c.ts", Run(w => GraphQuery.Path(g, "p", "c.ts", w)));
+    }
+
+    [Fact]
     public void Path_respects_max_length()
     {
         var g = PathGraph();
