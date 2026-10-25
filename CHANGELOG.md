@@ -19,6 +19,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ### 🔄 Changed
 - 🎯 A node id given as a name now always picks that node, even when other nodes share its name.
+- 📊 "References resolved" in the report only counts guesses - any string that looks like an object name, any
+  `x.y(` in SQL - when they link to something, so the rate reflects real references. It is higher than before
+  for the same code.
+- 📂 The built-in ignores no longer contain `rest-examples`; add it to your own `ignore` if you need it.
 - 🧭 `path` follows every relation (also `uses_library`, `released_in`, `opens`, `uses_value`, ...) and prefers a
   one-way chain (A uses ... B, or B uses ... A). A chain that changes direction - two files importing the same
   library - is only shown when there is no one-way chain, and is marked as such. The search stops at `--max-len`

@@ -165,6 +165,24 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Unlinked_candidates_do_not_count_as_unresolved_references()
+    {
+        var proc = new FileFacts { Lang = "sql", Symbols = [new Symbol { Name = "fetchall", Kind = "db_proc", Line = 1 }] };
+        proc.Symbols[0].X["key"] = "fetchall";
+        proc.Refs.Add(new Ref { Kind = "sql", Mode = "call", Name = "x.value", From = "fetchall" });  // XML method
+        proc.Refs.Add(new Ref { Kind = "sql", Mode = "read", Name = "missing_table", From = "fetchall" });
+        var code = new FileFacts { Lang = "csharp", Symbols = [Sym("Repo", "class"), Sym("Load", "method", "Repo")] };
+        code.Refs.Add(new Ref { Kind = "literal", Name = "hello", From = "Load", FromParent = "Repo" });
+        var linked = new Ref { Kind = "literal", Name = "fetchall", From = "Load", FromParent = "Repo" };
+        linked.X["db"] = true;
+        code.Refs.Add(linked);
+        var r = Builder.BuildGraph(Cfg("Shop"), [Rec("Database/fetchall.sql", proc), Rec("Svc/Repo.cs", code)]);
+        Assert.Equal(2, r.Stats["refs_total"]);     // the missing table and the linked string
+        Assert.Equal(1, r.Stats["refs_resolved"]);
+        Assert.False(r.Unresolved.ContainsKey("db:x.value"));
+    }
+
+    [Fact]
     public void Schema_qualified_strings_must_match_exactly()
     {
         var procs = new FileFacts { Lang = "sql" };

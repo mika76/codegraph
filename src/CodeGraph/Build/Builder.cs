@@ -660,7 +660,8 @@ public sealed partial class Builder
             var local = _fileSyms.GetValueOrDefault(fid) ?? [];
             foreach (var rf in f.Refs)
             {
-                Inc(_stats, "refs_total");
+                // candidates - any identifier-like string, any x.y( in SQL - only count once they link to something
+                bool candidate = rf.Kind == "literal" || (rf.Kind == "sql" && rf.Mode == "call");
                 // ---- who is calling
                 string caller;
                 if (XStr(rf.Extra, "item") is { } item && _g.HasNode(item))
@@ -677,7 +678,9 @@ public sealed partial class Builder
                         c = local.GetValueOrDefault(rf.FromParent.ToLowerInvariant());
                     caller = c ?? fid;
                 }
-                if (ResolveOne(fam, fid, caller, rf)) Inc(_stats, "refs_resolved");
+                bool resolved = ResolveOne(fam, fid, caller, rf);
+                if (!candidate || resolved) Inc(_stats, "refs_total");
+                if (resolved) Inc(_stats, "refs_resolved");
             }
         }
     }
