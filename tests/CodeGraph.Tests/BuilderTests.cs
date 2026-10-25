@@ -165,6 +165,18 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Missing_procedures_are_reported_with_where_they_were_first_called()
+    {
+        var code = new FileFacts { Lang = "csharp", Symbols = [Sym("Repo", "class"), Sym("Load", "method", "Repo")] };
+        code.Refs.Add(new Ref { Kind = "sql", Mode = "exec", Name = "missing_proc", From = "Load", FromParent = "Repo", Line = 7 });
+        code.Refs.Add(new Ref { Kind = "sql", Mode = "exec", Name = "missing_proc", From = "Load", FromParent = "Repo", Line = 9 });
+        var r = Builder.BuildGraph(Cfg("Shop"), [Rec("Svc/Repo.cs", code)]);
+        Assert.Equal("Shop: Svc/Repo.cs:7", r.Graph.Meta["unresolved_at"]!["exec:missing_proc"]!.ToString());
+        var md = CodeGraph.Output.Report.BuildReport(r.Graph, r.Stats, r.Unresolved, [], []);
+        Assert.Contains("| missing_proc | 2 | Shop: Svc/Repo.cs:7 |", md);
+    }
+
+    [Fact]
     public void Unlinked_candidates_do_not_count_as_unresolved_references()
     {
         var proc = new FileFacts { Lang = "sql", Symbols = [new Symbol { Name = "fetchall", Kind = "db_proc", Line = 1 }] };

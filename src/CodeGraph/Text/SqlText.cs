@@ -79,6 +79,7 @@ public static partial class SqlText
                     string nm = NormName(m.Groups[1].Value);
                     string b = ShortName(nm);
                     if (b.Length == 0 || Keywords.Contains(b) || b.StartsWith('@') || b.StartsWith('#')) continue;
+                    if (mode == "exec" && !ExecCallFollows(sql, m.Index + m.Length, b)) continue;
                     found.Add((mode, nm));
                 }
         foreach (Match m in FuncCall().Matches(sql))
@@ -111,6 +112,36 @@ public static partial class SqlText
     }
 
     public static bool LooksLikeSql(string s) => Sqlish().IsMatch(s);
+
+    /// <summary>Parsers join a routine's string pieces with this, so a piece boundary is a line end here.</summary>
+    public const string PieceSeparator = "\n";
+
+    private static readonly HashSet<string> AfterExec =
+    [
+        "null", "default", "with", "go", "select", "insert", "update", "delete", "merge", "exec", "execute", "if",
+        "begin", "end", "return", "declare", "set", "print", "commit", "rollback", "create", "alter", "drop", "else",
+        "while", "output", "out",
+    ];
+
+    /// <summary>
+    /// Whether "EXEC name" is a call, judged by what follows the name on its line: nothing (the piece ends), ';',
+    /// a parameter (@p, a literal, NULL / DEFAULT), a comment or the next statement. Prose like "Failed to execute
+    /// telnet command" or "execute report : x" has an ordinary word or a colon there. A name ending in '_' at the
+    /// end of a piece ("EXEC sp_" + name) is cut off by concatenation.
+    /// </summary>
+    private static bool ExecCallFollows(string sql, int at, string name)
+    {
+        int eol = sql.IndexOf('\n', at);
+        string rest = (eol < 0 ? sql[at..] : sql[at..eol]).TrimStart();
+        if (rest.Length == 0) return !name.EndsWith('_');
+        char c = rest[0];
+        if (c is ';' or '@' or '\'' or ',' or '(' or '[' || char.IsDigit(c) || rest.StartsWith("--") || rest.StartsWith("/*")
+            || (c is '-' && rest.Length > 1 && char.IsDigit(rest[1])) || rest.StartsWith("N'", StringComparison.OrdinalIgnoreCase))
+            return true;
+        int w = 0;
+        while (w < rest.Length && (char.IsLetter(rest[w]) || rest[w] == '_')) w++;
+        return w > 0 && (w == rest.Length || !char.IsLetterOrDigit(rest[w])) && AfterExec.Contains(rest[..w].ToLowerInvariant());
+    }
 
     /// <summary>
     /// If a string literal is just an object name - 'GetOrders', '[dbo].[x]', 'sales.get_orders' - return its

@@ -605,7 +605,7 @@ public static partial class JavaScriptParser
             }
         }
 
-        string joined = string.Join(" ", strings.Select(s => s.Value));
+        string joined = string.Join(SqlText.PieceSeparator, strings.Select(s => s.Value));
         if (SqlText.LooksLikeSql(joined))
         {
             // Python iterates a set (arbitrary order); sort for determinism.

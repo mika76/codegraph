@@ -122,9 +122,10 @@ public static class Report
         // ---- missing procs
         var ex = (unresolved ?? new Dictionary<string, int>()).Where(kv => kv.Key.StartsWith("exec:", StringComparison.Ordinal))
             .Select(kv => (Name: kv.Key[5..], Count: kv.Value)).OrderBy(x => -x.Count).ThenBy(x => x.Name, o).ToList();
+        var seenAt = g.Meta["unresolved_at"] as System.Text.Json.Nodes.JsonObject;
         if (ex.Count > 0)
             Sec($"Stored procedures called from code but not found ({ex.Count})",
-                Table(["Procedure", "Calls"], Rows(ex.Take(200), x => [x.Name, x.Count])),
+                Table(["Procedure", "Calls", "First seen"], Rows(ex.Take(200), x => [x.Name, x.Count, seenAt?["exec:" + x.Name]?.ToString() ?? ""])),
                 "These names are executed in code but no CREATE statement was found in the scanned repositories.");
 
         // ---- extractors (your own file formats)

@@ -507,7 +507,7 @@ public static partial class Vb6Parser
             var r = ri >= 0 ? routines[ri] : null;
             string? owner = r?.Name ?? key.Const;
             string? parent = r is not null ? containerFor(r.Start + 1) : key.Const is not null ? containerFor(items[0].Line) : null;
-            string joined = string.Join(" ", items.Select(i => i.S));
+            string joined = string.Join(SqlText.PieceSeparator, items.Select(i => i.S));
             if (SqlText.LooksLikeSql(joined))
             {
                 var found = SqlText.Refs(joined).OrderBy(f => f.Mode, StringComparer.Ordinal).ThenBy(f => f.Name, StringComparer.Ordinal);

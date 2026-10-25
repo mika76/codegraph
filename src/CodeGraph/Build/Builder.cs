@@ -149,9 +149,25 @@ public sealed partial class Builder
         foreach (var (k, v) in _stats) stats[k] = v;
         _g.Meta["stats"] = stats;
         var unresolved = new JsonObject();
-        foreach (var (k, v) in _unresolved.OrderByDescending(kv => kv.Value).Take(200)) unresolved[k] = v;
+        var firstSeen = new JsonObject();
+        foreach (var (k, v) in _unresolved.OrderByDescending(kv => kv.Value).Take(200))
+        {
+            unresolved[k] = v;
+            if (_firstSeen.TryGetValue(k, out var at)) firstSeen[k] = at;
+        }
         _g.Meta["unresolved"] = unresolved;
+        _g.Meta["unresolved_at"] = firstSeen;
         return _g;
+    }
+
+    private readonly Dictionary<string, string> _firstSeen = [];
+
+    /// <summary>Count a name that matched nothing and remember where it was first seen ("Repo: path:line").</summary>
+    private void Unresolved(string key, string fid, int line)
+    {
+        Inc(_unresolved, key);
+        if (!_firstSeen.ContainsKey(key))
+            _firstSeen[key] = $"{NodeStr(fid, "repo")}: {NodeStr(fid, "path")}:{line}";
     }
 
     // ================================================================== small helpers
@@ -756,7 +772,7 @@ public sealed partial class Builder
                 if (tgt is null)
                 {
                     // x.y( is often a method (XML .value(), a CLR type), not a missing function: not reported
-                    if (rf.Mode != "call") Inc(_unresolved, (rf.Mode == "exec" ? "exec:" : "db:") + name);
+                    if (rf.Mode != "call") Unresolved((rf.Mode == "exec" ? "exec:" : "db:") + name, fid, rf.Line);
                     return false;
                 }
                 string tk = N(tgt).Kind;
@@ -783,7 +799,7 @@ public sealed partial class Builder
                 if (tgt is not null && N(tgt).Kind is "db_proc" or "db_function" && (prefixed || rf.Extra?["db"] is not null))
                     return Edge(caller, tgt, "executes", lineAttr, ("via", "name in string"));
                 if (tgt is null && prefixed)
-                    Inc(_unresolved, "exec:" + name);
+                    Unresolved("exec:" + name, fid, rf.Line);
                 return false;
             }
             case "fk":

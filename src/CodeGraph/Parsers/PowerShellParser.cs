@@ -97,7 +97,7 @@ public static partial class PowerShellParser
         foreach (var o in order)
         {
             var items = byOwner[o ?? "\0"];
-            string joined = string.Join(" ", items.Select(i => i.Value));
+            string joined = string.Join(SqlText.PieceSeparator, items.Select(i => i.Value));
             if (SqlText.LooksLikeSql(joined))
                 foreach (var (mode, nm) in SqlRefsSorted(joined))
                     facts.Refs.Add(new Ref { From = o, Kind = "sql", Mode = mode, Name = nm, Line = li.Line(items[0].Offset) });

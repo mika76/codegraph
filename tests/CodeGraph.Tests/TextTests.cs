@@ -94,6 +94,23 @@ public class SqlTextTests
         Assert.Empty(SqlText.Refs("select * from #tmp join @t on 1=1"));
     }
 
+    [Theory]
+    [InlineData("exec get_orders", "get_orders")]
+    [InlineData("EXEC dbo.GetOrders @id = 1", "dbo.getorders")]
+    [InlineData("EXEC cleanup;", "cleanup")]
+    [InlineData("exec fetchall 'x', 2", "fetchall")]
+    [InlineData("EXEC archive NULL\nGO", "archive")]
+    [InlineData("EXEC master.dbo.xp_info", "master.dbo.xp_info")]
+    [InlineData("EXEC orders_purge -- nightly", "orders_purge")]
+    [InlineData("EXEC GetOrders \nFailed to load orders", "getorders")]  // the next piece of a concatenation
+    [InlineData("Failed to execute telnet command", null)]
+    [InlineData("execute report : ", null)]
+    [InlineData("Execute the command", null)]
+    [InlineData("Execute Stored Procedure responsible for it", null)]
+    [InlineData("EXEC sp_", null)]                                        // "EXEC sp_" + name
+    public void Exec_needs_a_call_shape(string sql, string? proc) =>
+        Assert.Equal(proc, SqlText.Refs(sql).Where(r => r.Mode == "exec").Select(r => r.Name).SingleOrDefault());
+
     [Fact]
     public void Function_calls_under_any_schema()
     {

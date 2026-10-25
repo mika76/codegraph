@@ -376,7 +376,7 @@ public static partial class CSharpParser
                 string shown = WsRe().Replace(raw, " ");
                 cs.X["value"] = shown.Length > 120 ? shown[..117] + "..." : shown;
                 symbols.Add(cs);
-                string sql = string.Join(" ", Scrub.CLike(raw).Strings.Select(s => s.Value));
+                string sql = string.Join(SqlText.PieceSeparator, Scrub.CLike(raw).Strings.Select(s => s.Value));
                 if (SqlText.LooksLikeSql(sql))
                     foreach (var (mode, nm) in SqlText.Refs(sql).OrderBy(f => f.Mode, StringComparer.Ordinal).ThenBy(f => f.Name, StringComparer.Ordinal))
                         refs.Add(new Ref { From = cs.Name, FromParent = t.Qual, Kind = "sql", Mode = mode, Name = nm, Line = cs.Line });
@@ -497,7 +497,7 @@ public static partial class CSharpParser
             var items = grouped[key];
             string? owner = key.IsMethod ? key.Owner : null;
             string? parent = key.Parent;
-            string joined = string.Join(" ", items.Select(i => i.Value));
+            string joined = string.Join(SqlText.PieceSeparator, items.Select(i => i.Value));
             int line = li.Line(items[0].Offset);
             if (SqlText.LooksLikeSql(joined))
                 foreach (var (mode, nm) in SqlText.Refs(joined).OrderBy(r => r.Mode, StringComparer.Ordinal).ThenBy(r => r.Name, StringComparer.Ordinal))

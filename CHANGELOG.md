@@ -32,6 +32,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   "(folder ?)".
 
 ### 🐛 Fixed
+- 🗣️ Text such as "Failed to execute telnet command" or "Execute the command" no longer counts as a call to a
+  procedure named `telnet` or `the`: `EXEC name` must be followed by nothing, `;`, a parameter, a comment or the
+  next statement. The report's "called but not found" list now shows where each name was first seen.
 - 💾 `build` no longer crashes when another program has `graph.json` open (e.g. a running `codegraph mcp`): the
   new graph is written next to it and swapped in, so readers never see a half-written file. If the file is
   locked for good, the build says so instead of printing a stack trace.
