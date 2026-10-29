@@ -9,6 +9,12 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### ✨ Added
+- 🧩 **Structured MCP results**: every MCP tool also returns its answer as JSON in `structuredContent`, with an
+  `outputSchema` per tool in `tools/list`, so a program can use the server without parsing text. Nodes and
+  connections have one shape everywhere (id, kind, name, repo, file, line; relation, direction, neighbour, mode,
+  line, via). A failed lookup returns the candidate nodes. The text answers are unchanged.
+
 ## [0.3.0] - 2026-10-25
 
 🤖 MCP server, column-level impact and naming-independent linking.

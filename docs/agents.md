@@ -77,6 +77,31 @@ Claude Code, `.cursor/mcp.json` in Cursor, `.vscode/mcp.json` with `"servers"` i
 
 The server logs to stderr; the MCP client shows those lines in its server log.
 
+### Structured results (for programs)
+
+Besides the text, every tool returns the same answer as JSON in `structuredContent`, and `tools/list` gives each
+tool's `outputSchema`. A program that runs `codegraph mcp` as a child process can read that instead of parsing text.
+Two shapes recur everywhere:
+
+- **node**: `{ id, kind, name, qual?, repo?, file?, file_id?, path?, line? }` - `file` is the repository-relative
+  path of the node's file (a file's own path for a file), `file_id` that file's node id.
+- **connection**: `{ relation, direction, id, node, count, mode?, line?, via?, dynamic?, version? }` - `direction` is
+  `out` (this node points at the neighbour) or `in`; `id` and `node` are the neighbour; `mode` is `read`, `write`,
+  `exec`, `alter`, `define`, `reference` or `trigger` on links to a database object or column; `line` is the first
+  place the link was seen; `dynamic` marks SQL built in a string.
+
+| Tool | `structuredContent` |
+|---|---|
+| `search` | `{ query, total, results: [node], truncated }` |
+| `show` | `{ node, attributes, connections: [connection], groups: [{ relation, direction, total, listed }] }` |
+| `impact` | `{ node, depth, total, truncated, affected: [node + { distance, projects }] }` (at most 2,000 listed) |
+| `path` | `{ from, to, found, one_way, steps: [{ relation, direction, id, node }] }` |
+| `source` | `{ node, full_path, start_line, end_line, lines: [text], more_lines }` or `{ node, problem }` |
+| `report` | `{ section?, text, sections: [heading] }` |
+
+A failed call (`isError: true`) returns `{ error, candidates? }`, with the matching or closest nodes when a name
+did not pick exactly one. A capped argument adds `notes`.
+
 A new `graph.json` is picked up automatically, but a new `codegraph.exe` is not: the running server keeps the code
 it started with. After installing or publishing a new version, restart the MCP server (or the client session). The
 server says so in its next answer when it notices a newer executable on disk.

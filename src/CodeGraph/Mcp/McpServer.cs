@@ -116,7 +116,10 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
     }
 
     /// <summary>A tool failure the caller should see as the tool's (error) result.</summary>
-    private sealed class ToolException(string message) : Exception(message);
+    private sealed class ToolException(string message, List<string>? candidates = null) : Exception(message)
+    {
+        public List<string>? Candidates { get; } = candidates;
+    }
 
     private static JsonObject Initialize(JsonObject? p)
     {
@@ -217,6 +220,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             ["properties"] = props,
             ["required"] = new JsonArray(required.Select(r => (JsonNode?)r).ToArray()),
         },
+        ["outputSchema"] = OutputSchema(name),
         ["annotations"] = new JsonObject { ["readOnlyHint"] = true, ["openWorldHint"] = false },
     };
 
@@ -225,43 +229,138 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
     private static JsonObject Int(string description, int def) =>
         new() { ["type"] = "integer", ["description"] = description, ["default"] = def };
 
+    // ---- output schemas (structuredContent) ----
+
+    private static JsonObject T(string type) => new() { ["type"] = type };
+
+    private static JsonObject Obj(JsonObject props, params string[] required) => new()
+    {
+        ["type"] = "object",
+        ["properties"] = props,
+        ["required"] = new JsonArray(required.Select(r => (JsonNode?)r).ToArray()),
+    };
+
+    private static JsonObject ArrOf(JsonObject item) => new() { ["type"] = "array", ["items"] = item };
+
+    /// <summary>The shape of every node in structured results (<see cref="Structured.NodeJson"/>).</summary>
+    private static JsonObject NodeSchema() => Obj(new JsonObject
+    {
+        ["id"] = T("string"), ["kind"] = T("string"), ["name"] = T("string"), ["qual"] = T("string"),
+        ["repo"] = T("string"), ["file"] = Str("Repository-relative path of the node's file."), ["file_id"] = T("string"),
+        ["path"] = T("string"), ["line"] = T("integer"),
+    }, "id", "kind", "name");
+
+    private static JsonObject Direction() => new() { ["type"] = "string", ["enum"] = new JsonArray("in", "out") };
+
+    /// <summary>The shape of every connection (<see cref="Structured.Connection"/>).</summary>
+    private static JsonObject ConnectionSchema() => Obj(new JsonObject
+    {
+        ["relation"] = T("string"), ["direction"] = Direction(), ["id"] = Str("The neighbour's node id."),
+        ["node"] = NodeSchema(), ["count"] = T("integer"),
+        ["mode"] = Str("read, write, exec, alter, define, reference or trigger, for a link to a database object or column."),
+        ["line"] = T("integer"), ["via"] = T("string"), ["dynamic"] = T("boolean"), ["version"] = T("string"),
+    }, "relation", "direction", "id", "node");
+
+    /// <summary>
+    /// A tool's structuredContent schema. Nothing is required at the top: a failed call (isError) returns
+    /// <c>{error, candidates}</c> instead.
+    /// </summary>
+    private static JsonObject OutputSchema(string tool)
+    {
+        var props = tool switch
+        {
+            "search" => new JsonObject
+            {
+                ["query"] = T("string"), ["total"] = T("integer"), ["results"] = ArrOf(NodeSchema()), ["truncated"] = T("boolean"),
+            },
+            "show" => new JsonObject
+            {
+                ["node"] = NodeSchema(), ["attributes"] = T("object"), ["connections"] = ArrOf(ConnectionSchema()),
+                ["groups"] = ArrOf(Obj(new JsonObject
+                {
+                    ["relation"] = T("string"), ["direction"] = Direction(), ["total"] = T("integer"), ["listed"] = T("integer"),
+                }, "relation", "direction", "total", "listed")),
+            },
+            "impact" => new JsonObject
+            {
+                ["node"] = NodeSchema(), ["depth"] = T("integer"), ["total"] = T("integer"), ["truncated"] = T("boolean"),
+                ["affected"] = ArrOf(With(NodeSchema(), ("distance", T("integer")), ("projects", ArrOf(T("string"))))),
+            },
+            "path" => new JsonObject
+            {
+                ["from"] = NodeSchema(), ["to"] = NodeSchema(), ["found"] = T("boolean"), ["one_way"] = T("boolean"),
+                ["steps"] = ArrOf(Obj(new JsonObject
+                {
+                    ["relation"] = T("string"), ["direction"] = Direction(), ["id"] = T("string"), ["node"] = NodeSchema(),
+                }, "relation", "direction", "id", "node")),
+            },
+            "source" => new JsonObject
+            {
+                ["node"] = NodeSchema(), ["full_path"] = T("string"), ["start_line"] = T("integer"), ["end_line"] = T("integer"),
+                ["lines"] = ArrOf(T("string")), ["more_lines"] = T("integer"), ["problem"] = T("string"),
+            },
+            "report" => new JsonObject
+            {
+                ["section"] = T("string"), ["text"] = T("string"), ["sections"] = ArrOf(T("string")),
+            },
+            _ => new JsonObject(),
+        };
+        props["error"] = Str("Set when the call failed (isError).");
+        props["candidates"] = With(ArrOf(NodeSchema()), ("description", "On a failed name lookup: the matching or closest nodes."));
+        return Obj(props);
+    }
+
+    private static JsonObject With(JsonObject o, params (string Key, JsonNode? Value)[] extra)
+    {
+        foreach (var (k, v) in extra)
+            if (k == "description" || o["properties"] is not JsonObject p) o[k] = v;
+            else p[k] = v;
+        return o;
+    }
+
     // ---- tool calls ----
 
     private JsonObject Call(JsonObject? p)
     {
         string name = p?["name"] is JsonValue v && v.TryGetValue(out string? s) ? s : "";
         var args = p?["arguments"] as JsonObject ?? [];
-        Func<JsonObject, string> run = name switch
+        Func<JsonObject, (string Text, JsonObject Data)> run = name switch
         {
             "search" => Search,
-            "show" => a => Query(w => GraphQuery.Show(Current(), Pick(a, "name"), w, Num(a, "limit", 40, 1, 1000),
-                Relation(a), Direction(a), ids: true)),
-            "impact" => a => Query(w => GraphQuery.Impact(Current(), Pick(a, "name"), w, Num(a, "depth", 3, 1, 10), ids: true)),
-            "path" => a => Query(w => GraphQuery.Path(Current(), Pick(a, "from"), Pick(a, "to"), w,
-                Num(a, "max_len", 8, 1, 20), ids: true)),
-            "source" => a => Query(w => GraphQuery.Source(Current(), Pick(a, "name"), w, Num(a, "context", 0, 0, 200),
-                Num(a, "max_lines", 200, 1, 2000))),
+            "show" => Show,
+            "impact" => Impact,
+            "path" => PathTool,
+            "source" => SourceTool,
             "report" => Report,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
         string text;
+        JsonObject data;
         _notes.Clear();
         bool isError = false;
         try
         {
-            text = run(args);
+            (text, data) = run(args);
         }
         catch (ToolException ex)
         {
             (text, isError) = (ex.Message, true);
+            data = new JsonObject { ["error"] = ex.Message };
+            if (ex.Candidates is { Count: > 0 } cands && _graph is { } g)
+                data["candidates"] = Structured.Arr(cands.Take(25).Select(c => (JsonNode?)Structured.NodeJson(g, c)));
         }
         catch (Exception ex) when (ex is not RpcException)
         {
             _log.WriteLine($"codegraph mcp: {name} failed: {ex}");
             (text, isError) = ($"{name} failed: {ex.Message}", true);
+            data = new JsonObject { ["error"] = text };
         }
         text = Cut(text);
-        if (_notes.Count > 0) text += "\n(" + string.Join(" ", _notes) + ")";
+        if (_notes.Count > 0)
+        {
+            text += "\n(" + string.Join(" ", _notes) + ")";
+            data["notes"] = Structured.Arr(_notes.Select(n => (JsonNode?)n));
+        }
         if (!_restartNoted && ExeUpdated())
         {
             // graph.json is reloaded on its own, but new code needs a new process
@@ -270,10 +369,12 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                                 "server (or the session) to use the new version.";
             _log.WriteLine("codegraph mcp: " + note);
             text += "\n\n(Note: " + note + ")";
+            (data["notes"] as JsonArray ?? (JsonArray)(data["notes"] = new JsonArray())).Add((JsonNode?)note);
         }
         return new JsonObject
         {
             ["content"] = new JsonArray(new JsonObject { ["type"] = "text", ["text"] = text }),
+            ["structuredContent"] = data,
             ["isError"] = isError,
         };
     }
@@ -285,7 +386,42 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         return w.ToString();
     }
 
-    private string Search(JsonObject a)
+    private (string, JsonObject) Show(JsonObject a)
+    {
+        var g = Current();
+        string id = Pick(a, "name");
+        int limit = Num(a, "limit", 40, 1, 1000);
+        string? rel = Relation(a);
+        string dir = Direction(a);
+        return (Query(w => GraphQuery.Show(g, id, w, limit, rel, dir, ids: true)), Structured.Show(g, id, limit, rel, dir));
+    }
+
+    private (string, JsonObject) Impact(JsonObject a)
+    {
+        var g = Current();
+        string id = Pick(a, "name");
+        int depth = Num(a, "depth", 3, 1, 10);
+        return (Query(w => GraphQuery.Impact(g, id, w, depth, ids: true)), Structured.Impact(g, id, depth));
+    }
+
+    private (string, JsonObject) PathTool(JsonObject a)
+    {
+        var g = Current();
+        string from = Pick(a, "from"), to = Pick(a, "to");
+        int maxLen = Num(a, "max_len", 8, 1, 20);
+        return (Query(w => GraphQuery.Path(g, from, to, w, maxLen, ids: true)), Structured.Path(g, from, to, maxLen));
+    }
+
+    private (string, JsonObject) SourceTool(JsonObject a)
+    {
+        var g = Current();
+        string id = Pick(a, "name");
+        int context = Num(a, "context", 0, 0, 200), maxLines = Num(a, "max_lines", 200, 1, 2000);
+        return (Query(w => GraphQuery.Source(g, id, w, context, maxLines)),
+            Structured.Source(g, id, GraphQuery.ReadSource(g, id, context, maxLines)));
+    }
+
+    private (string, JsonObject) Search(JsonObject a)
     {
         var g = Current();
         string query = Need(a, "query");
@@ -299,11 +435,12 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                                     string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
         var hits = GraphQuery.Search(g, query, kind, repo);
         var w = new StringWriter { NewLine = "\n" };
-        if (hits.Count == 0) return $"Nothing matches '{query}'.\n";
+        var data = Structured.Search(g, query, hits, limit);
+        if (hits.Count == 0) return ($"Nothing matches '{query}'.\n", data);
         w.WriteLine($"{hits.Count} match{(hits.Count == 1 ? "" : "es")} for '{query}':");
         foreach (var h in hits.Take(limit)) w.WriteLine($"  {GraphQuery.Label(g, h)}  {{{h}}}");
         if (hits.Count > limit) w.WriteLine($"  ... {hits.Count - limit} more (narrow with kind or repo, or raise limit)");
-        return w.ToString();
+        return (w.ToString(), data);
     }
 
     /// <summary>The node id a name argument means; an ambiguous or unknown name ends the call with a hint.</summary>
@@ -312,7 +449,8 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         var g = Current();
         string name = Need(a, key);
         var m = GraphQuery.Resolve(g, name);
-        return m.Id ?? throw new ToolException(GraphQuery.Problem(g, name, m) + $"Call again with an id as {key}, or use the search tool.");
+        return m.Id ?? throw new ToolException(GraphQuery.Problem(g, name, m) + $"Call again with an id as {key}, or use the search tool.",
+            m.Matches.Count > 0 ? m.Matches : m.Near);
     }
 
     private static string? Text(JsonObject a, string key) =>
@@ -356,7 +494,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
     private Graph? _relationsOf;
 
     /// <summary>The report's summary plus a list of sections, or the one section whose heading contains the text.</summary>
-    private string Report(JsonObject a)
+    private (string, JsonObject) Report(JsonObject a)
     {
         if (!File.Exists(reportPath)) throw new ToolException($"No report yet at {reportPath}. Run:  codegraph build");
         var lines = File.ReadAllLines(reportPath);
@@ -364,13 +502,18 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         string Section(int k) => string.Join("\n", lines[heads[k]..(k + 1 < heads.Count ? heads[k + 1] : lines.Length)]).TrimEnd() + "\n";
         string Titles() => string.Join("\n", heads.Select(h => "  " + lines[h][3..]));
         string? want = Text(a, "section");
+        var titles = Structured.Arr(heads.Select(h => (JsonNode?)lines[h][3..]));
         if (want is null)
         {
             string head = string.Join("\n", lines[..(heads.Count > 0 ? heads[0] : lines.Length)]).TrimEnd() + "\n\n";
-            return head + (heads.Count > 0 ? Section(0) : "") + "\nSections (call again with section):\n" + Titles() + "\n";
+            string summary = head + (heads.Count > 0 ? Section(0) : "");
+            return (summary + "\nSections (call again with section):\n" + Titles() + "\n",
+                new JsonObject { ["text"] = summary, ["sections"] = titles });
         }
         int found = heads.FindIndex(h => lines[h].Contains(want, StringComparison.OrdinalIgnoreCase));
-        return found >= 0 ? Section(found) : throw new ToolException($"No section matches '{want}'. Sections:\n{Titles()}");
+        return found >= 0
+            ? (Section(found), new JsonObject { ["section"] = lines[heads[found]][3..], ["text"] = Section(found), ["sections"] = titles })
+            : throw new ToolException($"No section matches '{want}'. Sections:\n{Titles()}");
     }
 
     private static string Direction(JsonObject a) => Text(a, "direction")?.ToLowerInvariant() switch

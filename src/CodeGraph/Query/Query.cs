@@ -237,44 +237,7 @@ public static class GraphQuery
     {
         var nid = Choose(g, name, w);
         if (nid is null) return;
-        var inn = new Dictionary<string, List<string>>();
-        var contains = new Dictionary<string, List<string>>();
-        foreach (var e in g.Edges)
-        {
-            if (DepRels.Contains(e.Relation))
-                (inn.TryGetValue(e.Target, out var l) ? l : inn[e.Target] = []).Add(e.Source);
-            if (e.Relation == "contains")
-            {
-                (contains.TryGetValue(e.Source, out var c) ? c : contains[e.Source] = []).Add(e.Target);
-                // a form / class runs its init members when opened or created: they affect it, and so who opens it
-                if (g.GetNode(e.Target) is { } m && IsInit(m))
-                    (inn.TryGetValue(e.Target, out var li) ? li : inn[e.Target] = []).Add(e.Source);
-            }
-            // a view shows what the action that renders it computed (model, ViewBag): an affected action affects it
-            if (e.Relation == "renders")
-                (inn.TryGetValue(e.Source, out var lv) ? lv : inn[e.Source] = []).Add(e.Target);
-        }
-        // a file / type / project is affected through its contained symbols too
-        var start = new HashSet<string> { nid };
-        var stack = new Stack<string>();
-        stack.Push(nid);
-        while (stack.Count > 0)
-            foreach (var c in contains.GetValueOrDefault(stack.Pop()) ?? [])
-                if (start.Add(c)) stack.Push(c);
-        var seen = new Dictionary<string, int>();
-        foreach (var s in start) seen[s] = 0;
-        var q = new Queue<string>(start);
-        while (q.Count > 0)
-        {
-            var cur = q.Dequeue();
-            if (seen[cur] >= depth) continue;
-            foreach (var src in inn.GetValueOrDefault(cur) ?? [])
-                if (!seen.ContainsKey(src))
-                {
-                    seen[src] = seen[cur] + 1;
-                    q.Enqueue(src);
-                }
-        }
+        var (start, seen) = Reach(g, nid, depth);
         var affected = seen.Keys.Where(s => !start.Contains(s)).ToList();
         w.WriteLine($"Impact of changing {Label(g, nid)}{(ids ? $"  {{{nid}}}" : "")} " +
                     $"(up to {depth} step{(depth == 1 ? "" : "s")}): {affected.Count} thing{(affected.Count == 1 ? "" : "s")}\n");
@@ -356,6 +319,62 @@ public static class GraphQuery
         }
     }
 
+    /// <summary>
+    /// Who depends on each node, one step back: the sources of dependency relations, plus a form / class for its init
+    /// members and a view for the action that renders it.
+    /// </summary>
+    public static Dictionary<string, List<string>> ReverseDeps(Graph g)
+    {
+        var inn = new Dictionary<string, List<string>>();
+        foreach (var e in g.Edges)
+        {
+            if (DepRels.Contains(e.Relation))
+                GetOrAdd(inn, e.Target).Add(e.Source);
+            // a form / class runs its init members when opened or created: they affect it, and so who opens it
+            if (e.Relation == "contains" && g.GetNode(e.Target) is { } m && IsInit(m))
+                GetOrAdd(inn, e.Target).Add(e.Source);
+            // a view shows what the action that renders it computed (model, ViewBag): an affected action affects it
+            if (e.Relation == "renders")
+                GetOrAdd(inn, e.Source).Add(e.Target);
+        }
+        return inn;
+    }
+
+    /// <summary>
+    /// What impact follows from a node: <c>Start</c> is the node and everything it contains (a file / type / project
+    /// is affected through its symbols too), <c>Seen</c> every node reached within <paramref name="depth"/> steps
+    /// with its distance (0 for the start set).
+    /// </summary>
+    public static (HashSet<string> Start, Dictionary<string, int> Seen) Reach(Graph g, string nid, int depth)
+    {
+        var inn = ReverseDeps(g);
+        var contains = new Dictionary<string, List<string>>();
+        foreach (var e in g.Edges)
+            if (e.Relation == "contains")
+                GetOrAdd(contains, e.Source).Add(e.Target);
+        var start = new HashSet<string> { nid };
+        var stack = new Stack<string>();
+        stack.Push(nid);
+        while (stack.Count > 0)
+            foreach (var c in contains.GetValueOrDefault(stack.Pop()) ?? [])
+                if (start.Add(c)) stack.Push(c);
+        var seen = new Dictionary<string, int>();
+        foreach (var s in start) seen[s] = 0;
+        var q = new Queue<string>(start);
+        while (q.Count > 0)
+        {
+            var cur = q.Dequeue();
+            if (seen[cur] >= depth) continue;
+            foreach (var src in inn.GetValueOrDefault(cur) ?? [])
+                if (!seen.ContainsKey(src))
+                {
+                    seen[src] = seen[cur] + 1;
+                    q.Enqueue(src);
+                }
+        }
+        return (start, seen);
+    }
+
     /// <summary>Folders with at least this many affected files are folded into one line.</summary>
     private const int FoldFiles = 6;
 
@@ -386,7 +405,31 @@ public static class GraphQuery
         var s = Choose(g, a, w);
         var t = Choose(g, b, w);
         if (s is null || t is null) return;
-        var fwd = new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
+        var (steps, mixed) = FindPath(g, s, t, maxLen);
+        if (steps is null)
+        {
+            w.WriteLine($"No connection found within {maxLen} step{(maxLen == 1 ? "" : "s")}.");
+            return;
+        }
+        string Id(string nid) => ids ? $"  {{{nid}}}" : "";
+        w.WriteLine(Label(g, s) + Id(s));
+        foreach (var (rel, d, c) in steps)
+        {
+            string arrow = d == "->" ? $"--{rel}-->" : $"<--{rel}--";
+            w.WriteLine($"  {arrow} {Label(g, c)}{Id(c)}");
+        }
+        if (mixed)
+            w.WriteLine("(No one-way chain: this path changes direction, e.g. both ends use the same thing or are used " +
+                        "by the same thing, so it may not be a real dependency.)");
+    }
+
+    /// <summary>
+    /// The chain <see cref="Path"/> prints: each step's relation, direction ("->" or "<-") and the node it reaches;
+    /// null when there is none. <c>Mixed</c> says it changes direction.
+    /// </summary>
+    public static (List<(string Rel, string Dir, string Node)>? Steps, bool Mixed) FindPath(Graph g, string s, string t, int maxLen)
+    {
+        var fwd =new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
         var back = new Dictionary<string, List<(string Next, string Rel, string Dir)>>();
         foreach (var e in g.Edges)
         {
@@ -411,21 +454,7 @@ public static class GraphQuery
             steps = Bfs(s, t, n => (fwd.GetValueOrDefault(n) ?? []).Concat(back.GetValueOrDefault(n) ?? []).Where(e => !Hub(n, e)), maxLen);
             mixed = steps is not null;
         }
-        if (steps is null)
-        {
-            w.WriteLine($"No connection found within {maxLen} step{(maxLen == 1 ? "" : "s")}.");
-            return;
-        }
-        string Id(string nid) => ids ? $"  {{{nid}}}" : "";
-        w.WriteLine(Label(g, s) + Id(s));
-        foreach (var (rel, d, c) in steps)
-        {
-            string arrow = d == "->" ? $"--{rel}-->" : $"<--{rel}--";
-            w.WriteLine($"  {arrow} {Label(g, c)}{Id(c)}");
-        }
-        if (mixed)
-            w.WriteLine("(No one-way chain: this path changes direction, e.g. both ends use the same thing or are used " +
-                        "by the same thing, so it may not be a real dependency.)");
+        return (steps, mixed);
     }
 
     /// <summary>
@@ -530,21 +559,34 @@ public static class GraphQuery
     {
         var nid = Choose(g, name, w);
         if (nid is null) return;
+        var src = ReadSource(g, nid, context, maxLines);
+        if (src.Problem is not null)
+        {
+            w.WriteLine(src.Problem);
+            return;
+        }
+        w.WriteLine($"{Label(g, nid)}\n{src.FullPath}:{src.From}-{src.From + src.Lines.Count - 1}");
+        for (int i = 0; i < src.Lines.Count; i++)
+            w.WriteLine($"{src.From + i,6}  {src.Lines[i]}");
+        if (src.More > 0) w.WriteLine($"   ... {src.More} more lines");
+    }
+
+    /// <summary>
+    /// Source lines of a node: <see cref="Lines"/> start at line <see cref="From"/>, <see cref="More"/> lines were
+    /// left out by the limit. <see cref="Problem"/> says why there is nothing to read.
+    /// </summary>
+    public sealed record SourceLines(string? FullPath, int From, List<string> Lines, int More, string? Problem);
+
+    public static SourceLines ReadSource(Graph g, string nid, int context = 0, int maxLines = 200)
+    {
         var n = g.GetNode(nid)!;
         bool isFile = n.Kind == "file";
         var fn = isFile ? n : g.GetNode(n.Str("file") ?? "");
         string? repoPath = fn is null ? null : g.GetNode("repo:" + fn.Str("repo"))?.Str("path");
         if (fn is null || string.IsNullOrEmpty(repoPath) || string.IsNullOrEmpty(fn.Str("path")))
-        {
-            w.WriteLine($"{Label(g, nid)} has no source location.");
-            return;
-        }
+            return new(null, 0, [], 0, $"{Label(g, nid)} has no source location.");
         string full = System.IO.Path.Combine(repoPath, fn.Str("path")!.Replace('/', System.IO.Path.DirectorySeparatorChar));
-        if (!File.Exists(full))
-        {
-            w.WriteLine($"File not found: {full}");
-            return;
-        }
+        if (!File.Exists(full)) return new(full, 0, [], 0, $"File not found: {full}");
         var lines = CodeGraph.Text.SourceText.Read(full).Split('\n');
         if (lines.Length > 1 && lines[^1].Length == 0) lines = lines[..^1];
         int start = isFile ? 1 : n.Int("line") ?? 1;
@@ -552,9 +594,8 @@ public static class GraphQuery
         int from = Math.Max(1, start - (isFile ? 0 : context));
         int to = Math.Min(lines.Length, end + (isFile ? 0 : context));
         int shownTo = Math.Min(to, from + maxLines - 1);
-        w.WriteLine($"{Label(g, nid)}\n{full}:{from}-{shownTo}");
-        for (int i = from; i <= shownTo; i++)
-            w.WriteLine($"{i,6}  {lines[i - 1].TrimEnd('\r')}");
-        if (shownTo < to) w.WriteLine($"   ... {to - shownTo} more lines");
+        var shown = new List<string>();
+        for (int i = from; i <= shownTo; i++) shown.Add(lines[i - 1].TrimEnd('\r'));
+        return new(full, from, shown, to - shownTo, null);
     }
 }

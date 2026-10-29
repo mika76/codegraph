@@ -75,6 +75,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   exactly - id, name, qual or path, any case - or as a `*` pattern, never by partial match: `GraphQuery.Resolve`).
   `graph.json` is written to a temp file and swapped in (readers like the MCP server never see a partial file).
 - `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
+  every tool returns text plus `structuredContent` (built in `Query/Structured.cs`, schemas in `OutputSchema`);
   tools search/show/impact/path/source/report wrap `GraphQuery`; reloads graph.json when its mtime changes.
   stdout is protocol only - log to stderr.
 

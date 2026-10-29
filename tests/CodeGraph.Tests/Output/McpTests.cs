@@ -204,6 +204,92 @@ public sealed class McpTests : IDisposable
         Assert.DoesNotContain("restart", Call(s, "search", new JsonObject { ["query"] = "Orders" }).Text);
     }
 
+    private static JsonObject Data(McpServer s, string tool, JsonObject? args = null) =>
+        Request(s, "tools/call", new JsonObject { ["name"] = tool, ["arguments"] = args ?? [] })["result"]!["structuredContent"]!.AsObject();
+
+    [Fact]
+    public void Every_tool_declares_an_output_schema()
+    {
+        foreach (var t in Request(Server(), "tools/list")["result"]!["tools"]!.AsArray())
+        {
+            var schema = t!["outputSchema"]!;
+            Assert.Equal("object", (string)schema["type"]!);
+            Assert.NotNull(schema["properties"]!["error"]);
+        }
+    }
+
+    [Fact]
+    public void Structured_search_and_show()
+    {
+        var s = Server();
+        var search = Data(s, "search", new JsonObject { ["query"] = "save", ["limit"] = 1 });
+        Assert.Equal(2, (int)search["total"]!);
+        Assert.True((bool)search["truncated"]!);
+        var first = search["results"]![0]!;
+        Assert.Equal(SampleGraph.Save, (string)first["id"]!);
+        Assert.Equal("sub", (string)first["kind"]!);
+        Assert.Equal("Shop", (string)first["repo"]!);
+        Assert.Equal("Sales/frmMain.frm", (string)first["file"]!);
+        Assert.Equal(10, (int)first["line"]!);
+
+        var show = Data(s, "show", new JsonObject { ["name"] = "Orders", ["direction"] = "in" });
+        Assert.Equal("db:Orders", (string)show["node"]!["id"]!);
+        Assert.Equal(2, show["attributes"]!["columns"]!.AsArray().Count);
+        var writes = show["connections"]!.AsArray().Where(c => (string)c!["relation"]! == "writes").ToList();
+        Assert.Equal(2, writes.Count);
+        var save = writes.Single(c => (string)c!["id"]! == SampleGraph.Save)!;
+        Assert.Equal("in", (string)save["direction"]!);
+        Assert.Equal("write", (string)save["mode"]!);
+        Assert.Equal(2, (int)save["count"]!);
+        Assert.Equal("Save", (string)save["node"]!["name"]!);
+        Assert.Equal(2, (int)show["groups"]![0]!["total"]!);
+    }
+
+    [Fact]
+    public void Structured_impact_path_source_and_errors()
+    {
+        var s = Server();
+        var impact = Data(s, "impact", new JsonObject { ["name"] = "db:Orders" });
+        var affected = impact["affected"]!.AsArray();
+        Assert.Equal((int)impact["total"]!, affected.Count);
+        var load = affected.Single(x => (string)x!["id"]! == SampleGraph.Load)!;
+        Assert.Equal(2, (int)load["distance"]!);  // Load executes usp_Save, which writes Orders
+        Assert.Equal("Order Entry", (string)load["projects"]![0]!);
+
+        var path = Data(s, "path", new JsonObject { ["from"] = "frmMain.Save", ["to"] = "usp_Save" });
+        Assert.True((bool)path["found"]!);
+        Assert.True((bool)path["one_way"]!);
+        Assert.Equal(["calls", "executes"], path["steps"]!.AsArray().Select(x => (string)x!["relation"]!));
+        Assert.Equal("db:usp_Save", (string)path["steps"]![1]!["id"]!);
+        Assert.Equal("out", (string)path["steps"]![1]!["direction"]!);
+
+        var noSource = Data(s, "source", new JsonObject { ["name"] = "frmMain.Save" });
+        Assert.Contains("File not found", (string)noSource["problem"]!);
+
+        var r = Request(s, "tools/call", new JsonObject { ["name"] = "show", ["arguments"] = new JsonObject { ["name"] = "db:Ord" } })["result"]!;
+        Assert.True((bool)r["isError"]!);
+        Assert.StartsWith("No node has the id", (string)r["structuredContent"]!["error"]!);
+        Assert.Equal("db:Orders", (string)r["structuredContent"]!["candidates"]![0]!["id"]!);
+        // the text answer is the same as before
+        Assert.Equal((string)r["content"]![0]!["text"]!, (string)r["structuredContent"]!["error"]!);
+    }
+
+    [Fact]
+    public void Structured_source_lines()
+    {
+        string repo = Path.Combine(_dir, "Shop");
+        Directory.CreateDirectory(Path.Combine(repo, "Sales"));
+        File.WriteAllLines(Path.Combine(repo, "Sales", "frmMain.frm"), Enumerable.Range(1, 20).Select(i => $"line {i}"));
+        var g = SampleGraph.Create();
+        g.Node("repo:Shop", ("path", repo));
+        g.Save(GraphPath);
+        var src = Data(Server(), "source", new JsonObject { ["name"] = "frmMain.Save", ["max_lines"] = 3 });
+        Assert.Equal(10, (int)src["start_line"]!);
+        Assert.Equal(12, (int)src["end_line"]!);
+        Assert.Equal(["line 10", "line 11", "line 12"], src["lines"]!.AsArray().Select(x => (string)x!));
+        Assert.Equal(2, (int)src["more_lines"]!);
+    }
+
     [Fact]
     public void Long_output_is_cut_at_a_line_end()
     {
