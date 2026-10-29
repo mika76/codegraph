@@ -176,6 +176,9 @@ public class JavaScriptParserTests
               <router-link to="/invoices">Invoices</router-link>
               <RouterLink :to="{ name: 'orders' }">Orders</RouterLink>
               <router-link :to="item.path">dynamic</router-link>
+              <button @click="router.push({ name: 'lines' })">Lines</button>
+              <a v-on:click.prevent='$router.push("/help")'>Help</a>
+              <button @click="items.push(item)">add</button>
             </template>
             <script setup lang="ts">
             import { useRouter } from 'vue-router'
@@ -189,7 +192,10 @@ public class JavaScriptParserTests
         Assert.Contains(links, r => r.X["route_name"]?.ToString() == "orders");
         Assert.Contains(links, r => r is { Name: "orders/{}/lines", From: "open" });
         Assert.Contains(links, r => r is { Name: "", From: "home" });
-        Assert.Equal(4, links.Count); // :to="item.path" is dynamic: skipped
+        // a push written in an event handler of the template
+        Assert.Contains(links, r => r.X["route_name"]?.ToString() == "lines" && r.Line == 5);
+        Assert.Contains(links, r => r.Name == "help" && r.Line == 6);
+        Assert.Equal(6, links.Count); // :to="item.path" is dynamic and items.push(item) no route: skipped
         Assert.All(links, r => Assert.True(r.X.ContainsKey("candidate")));
         // an array push is no navigation when the file doesn't use a router
         var plain = JavaScriptParser.Parse("src/util.ts", "export function f(a: string[]) { a.push('/x') }");

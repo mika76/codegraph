@@ -24,6 +24,7 @@ internal static partial class JsRoutes
     [GeneratedRegex(@"\.(?:push|replace)\s*\(\s*|\bnavigateTo\s*\(\s*", O)] private static partial Regex NavigateCall();
     [GeneratedRegex(@"<(?:router-link|RouterLink|nuxt-link|NuxtLink)\b([^>]*)>", O | RegexOptions.IgnoreCase)] private static partial Regex LinkTag();
     [GeneratedRegex("""(?<![\w:-])(:|v-bind:)?to\s*=\s*(?:"([^"]*)"|'([^']*)')""", O)] private static partial Regex ToAttr();
+    [GeneratedRegex("""(?<![\w-])(?:@|v-on:)[\w.:-]+\s*=\s*(?:"([^"]*)"|'([^']*)')""", O)] private static partial Regex HandlerAttr();
 
     /// <summary>A string literal starting at <paramref name="at"/> in the original text: its value, or null.</summary>
     private static string? Literal(string text, int at)
@@ -182,7 +183,12 @@ internal static partial class JsRoutes
     /// <summary>push / replace / navigateTo targets in code that uses a router: (offset, path, name).</summary>
     public static IEnumerable<(int Offset, string? Path, string? Name)> ScriptLinks(string code, string text)
     {
-        if (!UsesRouter().IsMatch(text)) yield break;
+        if (!UsesRouter().IsMatch(text)) return [];
+        return Navigations(code, text);
+    }
+
+    private static IEnumerable<(int Offset, string? Path, string? Name)> Navigations(string code, string text)
+    {
         foreach (Match m in NavigateCall().Matches(code))
         {
             int at = m.Index + m.Length;
@@ -191,9 +197,19 @@ internal static partial class JsRoutes
         }
     }
 
-    /// <summary>&lt;router-link to="/x"&gt; / :to="'/x'" / :to="{ name: 'x' }" in a template: (offset, path, name).</summary>
-    public static IEnumerable<(int Offset, string? Path, string? Name)> TemplateLinks(string template)
+    /// <summary>
+    /// &lt;router-link to="/x"&gt; / :to="'/x'" / :to="{ name: 'x' }" in a template, and router.push(...) written in an
+    /// event handler (@click="router.push({ name: 'x' })") when the file uses a router: (offset, path, name).
+    /// </summary>
+    public static IEnumerable<(int Offset, string? Path, string? Name)> TemplateLinks(string template, string fileText)
     {
+        if (UsesRouter().IsMatch(fileText))
+            foreach (Match h in HandlerAttr().Matches(template))
+            {
+                var g = h.Groups[1].Success ? h.Groups[1] : h.Groups[2];
+                foreach (var (at, p, n) in Navigations(Scrub.CLike(g.Value, verbatimAt: false, backtick: true).Code, g.Value))
+                    yield return (g.Index + at, p, n);
+            }
         foreach (Match tag in LinkTag().Matches(template))
         {
             var to = ToAttr().Match(tag.Groups[1].Value);

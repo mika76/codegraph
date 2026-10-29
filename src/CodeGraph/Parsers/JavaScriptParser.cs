@@ -788,7 +788,7 @@ public static partial class JavaScriptParser
                     Line = li.Line(tm.Groups[1].Index + m.Index),
                 });
             }
-            foreach (var (at, navPath, navName) in JsRoutes.TemplateLinks(tm.Groups[1].Value))
+            foreach (var (at, navPath, navName) in JsRoutes.TemplateLinks(tm.Groups[1].Value, text))
                 facts.Refs.Add(JsRoutes.LinkRef(null, comp, li.Line(tm.Groups[1].Index + at), navPath, navName));
         }
         facts.Lang = "vue";

@@ -24,6 +24,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   object, so a link recorded to fill a gap in the code (a call made at runtime) now counts.
 
 ### 🐛 Fixed
+- 🧭 A router push written in a Vue template's event handler (`@click="router.push({ name: 'x' })"`,
+  `v-on:click='$router.push("/x")'`) links to its route like one in the script.
 - 🧠 `remember` writes a routine as `Type.Member` (or its node id when that is not unique), not as its bare name, which
   breaks once another routine gets the same name; knowledge files can name routines that way.
 - 🗃️ `db_usage` counts extractor items that carry SQL (a patch in a patch list, a report definition) and the files
