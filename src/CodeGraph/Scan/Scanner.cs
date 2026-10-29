@@ -145,7 +145,7 @@ public static class Scanner
     private static string? Signature(ExtractorConfig? x) =>
         x is null ? null : JsonSerializer.Serialize(x, ConfigJson.Default.ExtractorConfig);
 
-    private static Dictionary<string, CacheEntry> LoadCache(string path)
+    internal static Dictionary<string, CacheEntry> LoadCache(string path)
     {
         try
         {

@@ -8,7 +8,7 @@ Machine- and company-specific context is in `CLAUDE.local.md` (git-ignored) when
 
 Build the exe with `.\publish.ps1` (-> `publish\codegraph.exe`; the native link step needs the VS C++ workload and
 the script puts `vswhere.exe` on PATH). Run: `.\publish\codegraph.exe build [--full] [--no-vault] | show <name> |
-impact <name> [--depth N] | path <a> <b> | mcp | release-snapshot <ver> | init`. Without the native toolchain:
+impact <name> [--depth N] | path <a> <b> | db-usage <name> | mcp | release-snapshot <ver> | init`. Without the native toolchain:
 `dotnet run --project src\CodeGraph -c Release -- <command>`.
 Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.json`, `knowledge.json`,
 `proc_prefixes`). These three files are the user's own and git-ignored; `codegraph init` writes the examples from
@@ -76,7 +76,8 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   `graph.json` is written to a temp file and swapped in (readers like the MCP server never see a partial file).
 - `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
   every tool returns text plus `structuredContent` (built in `Query/Structured.cs`, schemas in `OutputSchema`);
-  tools search/show/impact/path/source/report wrap `GraphQuery`; reloads graph.json when its mtime changes.
+  tools search/show/impact/path/source/db_usage/report wrap `GraphQuery` (`db_usage`: `Query/DbUsage.cs`, possible
+  users from the parse cache via `Query/RefIndex.cs`); reloads graph.json when its mtime changes.
   stdout is protocol only - log to stderr.
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,

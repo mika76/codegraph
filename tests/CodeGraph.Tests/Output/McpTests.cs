@@ -78,7 +78,7 @@ public sealed class McpTests : IDisposable
     public void Lists_read_only_tools_with_schemas()
     {
         var tools = Request(Server(), "tools/list")["result"]!["tools"]!.AsArray();
-        Assert.Equal(["search", "show", "impact", "path", "source", "report"], tools.Select(t => (string)t!["name"]!));
+        Assert.Equal(["search", "show", "impact", "path", "source", "db_usage", "report"], tools.Select(t => (string)t!["name"]!));
         foreach (var t in tools)
         {
             Assert.Equal("object", (string)t!["inputSchema"]!["type"]!);
@@ -288,6 +288,113 @@ public sealed class McpTests : IDisposable
         Assert.Equal(12, (int)src["end_line"]!);
         Assert.Equal(["line 10", "line 11", "line 12"], src["lines"]!.AsArray().Select(x => (string)x!));
         Assert.Equal(2, (int)src["more_lines"]!);
+    }
+
+    /// <summary>A parse cache next to graph.json with these references in Sales/Old.bas and Sales/modDb.bas.</summary>
+    private void WriteCache(params (string File, CodeGraph.Model.Ref Ref)[] refs)
+    {
+        var cache = new CodeGraph.Scan.CacheFile { Version = CodeGraph.Scan.Scanner.ParserVersion };
+        foreach (var (file, rf) in refs)
+        {
+            string abs = "C:/x/Shop/" + file;
+            if (!cache.Files.TryGetValue(abs, out var entry))
+                cache.Files[abs] = entry = new CodeGraph.Scan.CacheEntry { Facts = new() { Lang = "vb6" } };
+            entry.Facts.Refs.Add(rf);
+        }
+        File.WriteAllText(Path.Combine(_dir, CodeGraph.Scan.Scanner.CacheFileName),
+            System.Text.Json.JsonSerializer.Serialize(cache, CodeGraph.Scan.CacheJson.Default.CacheFile));
+    }
+
+    [Fact]
+    public void Db_usage_lists_users_possible_matches_and_entry_points()
+    {
+        var g = SampleGraph.Create();
+        // an API endpoint that runs the procedure, and a column read by a statement with two tables
+        g.Node("sym:Shop:Api/OrdersController.cs#OrdersController.Post", ("kind", "method"), ("name", "Post"),
+            ("qual", "OrdersController.Post"), ("routes", new JsonArray("POST /orders")));
+        g.AddEdge("sym:Shop:Api/OrdersController.cs#OrdersController.Post", "db:usp_Save", "executes", attrs: ("line", (JsonNode?)7));
+        g.Save(GraphPath);
+        WriteCache(
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Orders", Line = 4 }),
+            ("Sales/modDb.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "dbo.Orders", Line = 5, From = "Load", FromParent = "modDb" }),
+            ("Sales/modDb.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "other.Orders", Line = 6 }),
+            ("Sales/frmMain.frm", new CodeGraph.Model.Ref { Kind = "literal", Name = "Orders", Line = 12, From = "Save", FromParent = "frmMain" }));
+        var s = Server();
+        var d = Data(s, "db_usage", new JsonObject { ["name"] = "Orders" });
+        Assert.Equal("db:Orders", (string)d["target"]!["id"]!);
+        Assert.True((bool)d["possible_checked"]!);
+        var users = d["users"]!.AsArray();
+        var save = users.Single(u => (string)u!["id"]! == SampleGraph.Save)!;
+        Assert.Equal(("confirmed", "app", "write", "writes"),
+            ((string)save["confidence"]!, (string)save["layer"]!, (string)save["mode"]!, (string)save["relation"]!));
+        Assert.Equal("database", (string)users.Single(u => (string)u!["id"]! == "db:usp_Save")!["layer"]!);
+        // possible, by file and line: the strings in Old.bas, in modDb.Load and 'other.Orders' (no such table is
+        // defined, so it may mean this one); not the one in frmMain.Save, which is already linked
+        var possible = users.Where(u => (string)u!["confidence"]! == "possible").ToList();
+        Assert.Equal([SampleGraph.FOrphan, SampleGraph.Load, SampleGraph.FDb], possible.Select(u => (string)u!["id"]!));
+        var old = possible.First(u => (string)u!["id"]! == SampleGraph.FOrphan)!;
+        Assert.Equal(("Sales/Old.bas", 4, "Orders", "name in a string"),
+            ((string)old["file"]!, (int)old["line"]!, (string)old["text"]!, (string)old["reason"]!));
+        Assert.Equal(2, (int)d["counts"]!["confirmed"]!);
+        Assert.Equal(3, (int)d["counts"]!["possible"]!);
+        Assert.Equal(1, (int)d["counts"]!["confirmed_app"]!);
+
+        var entries = d["entry_points"]!.AsArray();
+        var form = entries.Single(e => (string)e!["id"]! == SampleGraph.TForm)!;
+        Assert.Equal(("form", 0, "confirmed"), ((string)form["kind"]!, (int)form["distance"]!, (string)form["confidence"]!));
+        var api = entries.Single(e => (string)e!["kind"]! == "api")!;
+        Assert.Equal(1, (int)api["distance"]!);  // runs usp_Save, which writes Orders
+        Assert.Equal("POST /orders", (string)api["routes"]![0]!);
+        Assert.Equal("db:usp_Save", (string)api["through"]![0]!);
+
+        var text = Call(s, "db_usage", new JsonObject { ["name"] = "db:Orders" }).Text;
+        Assert.Contains("Direct users (2, linked):", text);
+        Assert.Contains($"write     frmMain.Save (sub)  [Sales/frmMain.frm:10]  {{{SampleGraph.Save}}}", text);
+        Assert.Contains("Sales/Old.bas:4  \"Orders\"  name in a string", text);
+        Assert.Contains("api       OrdersController.Post (method)  POST /orders  (1 step from usp_Save)", text);
+
+        // with another table of that name defined, other.Orders is that one
+        g.Node("db:other.orders", ("kind", "db_table"), ("name", "Orders"));
+        g.Save(GraphPath);
+        File.SetLastWriteTimeUtc(GraphPath, DateTime.UtcNow.AddMinutes(1));
+        Assert.Equal(2, (int)Data(s, "db_usage", new JsonObject { ["name"] = "db:Orders" })["counts"]!["possible"]!);
+    }
+
+    [Fact]
+    public void Db_usage_of_a_column_and_bad_targets()
+    {
+        var g = SampleGraph.Create();
+        g.Node("col:orders.status", ("kind", "column"), ("name", "Orders.Status"), ("table", "db:Orders"));
+        g.AddEdge("db:Orders", "col:orders.status", "contains");
+        g.AddEdge(SampleGraph.Save, "col:orders.status", "writes", attrs: ("line", (JsonNode?)11));
+        // a patch embedded in a file of patches (an extractor item) that reads it
+        g.Node("item:patch:7", ("kind", "patch"), ("name", "7"), ("file", SampleGraph.FOrphan));
+        g.AddEdge("item:patch:7", "col:orders.status", "reads", attrs: ("line", (JsonNode?)8));
+        g.Save(GraphPath);
+        var two = new JsonArray("orders", "customers");
+        WriteCache(
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "column", Name = "Status", Line = 2, Extra = new JsonObject { ["tables"] = two } }),
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "column", Name = "Status", Line = 3, Extra = new JsonObject { ["tables"] = new JsonArray("customers") } }),
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Status", Line = 5, Extra = new JsonObject { ["column"] = true } }),
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Status", Line = 6 }),
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "column", Name = "Status", Line = 9, Extra = new JsonObject { ["tables"] = two.DeepClone(), ["item"] = "item:patch:7" } }));
+        var s = Server();
+        var d = Data(s, "db_usage", new JsonObject { ["name"] = "Orders.Status" });
+        var users = d["users"]!.AsArray();
+        Assert.Equal("write", (string)users[0]!["mode"]!);
+        Assert.Equal(11, (int)users[0]!["line"]!);
+        Assert.Equal("read", (string)users[1]!["mode"]!);  // the patch
+        // the column of another table, the plain string and the patch's own statement are not possible users
+        Assert.Equal(["column in SQL with several tables", "column read by name"],
+            users.Skip(2).Select(u => (string)u!["reason"]!));
+        // without the cache: no possible users, and it says so
+        var noPossible = Data(s, "db_usage", new JsonObject { ["name"] = "Orders.Status", ["possible"] = false });
+        Assert.False((bool)noPossible["possible_checked"]!);
+        Assert.Equal(2, noPossible["users"]!.AsArray().Count);
+
+        var (text, err) = Call(s, "db_usage", new JsonObject { ["name"] = "frmMain.Save" });
+        Assert.True(err);
+        Assert.Contains("is not a database object or column", text);
     }
 
     [Fact]

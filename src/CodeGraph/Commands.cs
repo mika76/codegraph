@@ -78,6 +78,22 @@ public static class Commands
         return 0;
     }
 
+    public static int DbUsage(Config cfg, string name, int depth)
+    {
+        var g = LoadGraph(cfg);
+        var m = GraphQuery.Resolve(g, name);
+        if (GraphQuery.Problem(g, name, m) is { } problem)
+        {
+            Console.Write(problem);
+            return 1;
+        }
+        if (!Query.DbUsage.IsDbNode(g.GetNode(m.Id!)!))
+            throw new CodeGraphException($"{GraphQuery.Label(g, m.Id!)} is not a database object or column. Use impact for other things.");
+        var refs = RefIndex.Load(g, System.IO.Path.Combine(cfg.Output, Scanner.CacheFileName));
+        Query.DbUsage.Write(g, Query.DbUsage.Find(g, m.Id!, depth, refs), Console.Out);
+        return 0;
+    }
+
     /// <summary>Serve the graph over MCP on stdin/stdout until the client closes stdin.</summary>
     public static int Mcp(Config cfg)
     {

@@ -14,6 +14,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   `outputSchema` per tool in `tools/list`, so a program can use the server without parsing text. Nodes and
   connections have one shape everywhere (id, kind, name, repo, file, line; relation, direction, neighbour, mode,
   line, via). A failed lookup returns the candidate nodes. The text answers are unchanged.
+- 🗃️ **`db_usage`** (MCP tool and `codegraph db-usage <name>`): who uses a table, view, procedure or column in one
+  answer - the direct users with read / write / exec and file:line, split into application code, SQL scripts and
+  database objects; possible users (strings and SQL that name it but were not linked, from the parse cache, marked
+  `possible`); and the forms, components, views, client routes and API endpoints above them, found by walking up
+  the callers. Made for "used by" panels and rename / drop previews.
 
 ## [0.3.0] - 2026-10-25
 

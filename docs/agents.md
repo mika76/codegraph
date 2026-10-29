@@ -45,6 +45,7 @@ files that the `source` tool shows.
 | `impact` | `name`, `depth?` | everything that depends on it, grouped by project and file |
 | `path` | `from`, `to`, `max_len?` | the shortest chain connecting two nodes; one-way chains first, a chain that changes direction only as a marked fallback |
 | `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
+| `db_usage` | `name`, `depth?`, `possible?` | who uses a table, view, procedure or column: direct users with read / write / exec and file:line (linked), possible users (strings and SQL naming it that were not linked), and the forms, components, views, routes and API endpoints above them |
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
 
 `search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
@@ -98,9 +99,26 @@ Two shapes recur everywhere:
 | `path` | `{ from, to, found, one_way, steps: [{ relation, direction, id, node }] }` |
 | `source` | `{ node, full_path, start_line, end_line, lines: [text], more_lines }` or `{ node, problem }` |
 | `report` | `{ section?, text, sections: [heading] }` |
+| `db_usage` | `{ target, depth, possible_checked, counts, users: [user], entry_points: [entry], truncated }` (see below) |
 
 A failed call (`isError: true`) returns `{ error, candidates? }`, with the matching or closest nodes when a name
 did not pick exactly one. A capped argument adds `notes`.
+
+`db_usage` (also `codegraph db-usage <name> [--depth N]`) is made for a "used by" panel or a rename / drop preview:
+
+- **user**: `{ id, node, confidence, layer, relation?, mode?, line?, via?, dynamic?, count?, file?, file_id?, text?,
+  reason?, projects? }`. `confidence` is `confirmed` (a resolved link in the graph: `relation`, `mode`, first `line`)
+  or `possible` (a reference that names the target but was not linked: `file`, `line`, `text` as written, `reason`,
+  e.g. "name in a string", "column in SQL with several tables", "column read by name"). Possible users come from the
+  parse cache (`cache.json` next to `graph.json`); `possible_checked` is false without it. Routines that already
+  have a confirmed link are not repeated as possible. `layer` is `app` (application code), `script` (a SQL file) or
+  `database` (a procedure, view, trigger or table).
+- **entry point**: `{ id, node, kind, distance, confidence, through, routes?, projects? }` - `kind` is `form`,
+  `component`, `view`, `route` or `api` (a method with routes; `routes` like `GET /orders/{}`). It is found by
+  walking up the callers of each user for up to `depth` steps (default 4); `distance` 0 means the user is in that
+  form or is that endpoint. `through` lists the users it was reached from; it is `possible` when only possible
+  users lead there.
+- **counts**: `{ confirmed, possible, confirmed_app, confirmed_script, confirmed_database, entry_points }`.
 
 A new `graph.json` is picked up automatically, but a new `codegraph.exe` is not: the running server keeps the code
 it started with. After installing or publishing a new version, restart the MCP server (or the client session). The

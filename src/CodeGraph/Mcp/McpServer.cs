@@ -30,7 +30,8 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         "A code knowledge graph of the configured repositories: projects, files, routines, database tables and " +
         "procedures, API routes, installers and releases, and how they use each other. Start with `search` to find " +
         "a node, then use `show` (its connections; filter with relation/direction), `impact` (what depends on it), " +
-        "`path` (how two things are connected) and `source` (read the code). Those tools need an exact node id, name " +
+        "`path` (how two things are connected), `source` (read the code) and `db_usage` (who reads or writes a table, " +
+        "column or procedure, up to the screens and API endpoints). Those tools need an exact node id, name " +
         "or path (ids are printed in {braces}), or a pattern with * as wildcard; they never guess. Links are " +
         "deterministic but not complete (e.g. URLs built at runtime " +
         "and late binding are not followed), so check important answers against the source.";
@@ -200,6 +201,22 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                 ["context"] = Int("Extra lines before and after a definition.", 0),
                 ["max_lines"] = Int("Most lines to return.", 200),
             }, "name"),
+        Tool("db_usage",
+            "Who uses a database table, view, procedure, function or column, in one answer: the direct users with " +
+            "read / write / exec and file:line (confirmed: resolved links), possible users (strings and SQL that name " +
+            "it but could not be linked, e.g. a column of a statement with several tables; check them in the source), " +
+            "and the entry points above them - forms, components, views, client routes and API endpoints - found by " +
+            "walking up the callers. Use before renaming or dropping a table, column or procedure.",
+            new JsonObject
+            {
+                ["name"] = Str("A db: or col: id, or the name of a database object or column (e.g. Orders, Orders.Total). " + NameHelp),
+                ["depth"] = Int("How many caller steps to walk up from each user to find entry points.", 4),
+                ["possible"] = new JsonObject
+                {
+                    ["type"] = "boolean", ["default"] = true,
+                    ["description"] = "Also list possible users (unlinked strings and SQL names) from the parse cache.",
+                },
+            }, "name"),
         Tool("report",
             "The build report. Without a section: the summary (counts, languages, how many references were " +
             "resolved) and the list of sections, e.g. projects, unused database objects, procedures called but " +
@@ -299,6 +316,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                 ["node"] = NodeSchema(), ["full_path"] = T("string"), ["start_line"] = T("integer"), ["end_line"] = T("integer"),
                 ["lines"] = ArrOf(T("string")), ["more_lines"] = T("integer"), ["problem"] = T("string"),
             },
+            "db_usage" => DbUsageSchema(),
             "report" => new JsonObject
             {
                 ["section"] = T("string"), ["text"] = T("string"), ["sections"] = ArrOf(T("string")),
@@ -308,6 +326,49 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         props["error"] = Str("Set when the call failed (isError).");
         props["candidates"] = With(ArrOf(NodeSchema()), ("description", "On a failed name lookup: the matching or closest nodes."));
         return Obj(props);
+    }
+
+    private static JsonObject DbUsageSchema()
+    {
+        var confidence = new JsonObject
+        {
+            ["type"] = "string", ["enum"] = new JsonArray("confirmed", "possible"),
+            ["description"] = "confirmed: a resolved link in the graph; possible: a name match that was not linked.",
+        };
+        var user = Obj(new JsonObject
+        {
+            ["id"] = T("string"), ["node"] = NodeSchema(), ["confidence"] = confidence.DeepClone(),
+            ["layer"] = new JsonObject
+            {
+                ["type"] = "string", ["enum"] = new JsonArray("app", "script", "database"),
+                ["description"] = "app: application code; script: a SQL file (patch, deploy script); database: a DB object.",
+            },
+            ["relation"] = T("string"),
+            ["mode"] = Str("read, write, exec, alter, define, reference or trigger."),
+            ["line"] = T("integer"), ["via"] = T("string"), ["dynamic"] = T("boolean"), ["count"] = T("integer"),
+            ["file"] = Str("Possible users: the file of the match."), ["file_id"] = T("string"),
+            ["text"] = Str("Possible users: the name as written in the code."), ["reason"] = T("string"),
+            ["projects"] = ArrOf(T("string")),
+        }, "id", "node", "confidence", "layer");
+        var entry = Obj(new JsonObject
+        {
+            ["id"] = T("string"), ["node"] = NodeSchema(),
+            ["kind"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("form", "component", "view", "route", "api") },
+            ["distance"] = Str("Caller steps from the nearest user (0: the user itself)."),
+            ["confidence"] = confidence.DeepClone(), ["through"] = ArrOf(T("string")), ["routes"] = ArrOf(T("string")),
+            ["projects"] = ArrOf(T("string")),
+        }, "id", "node", "kind", "distance", "confidence");
+        entry["properties"]!["distance"]!["type"] = "integer";
+        return new JsonObject
+        {
+            ["target"] = NodeSchema(), ["depth"] = T("integer"), ["possible_checked"] = T("boolean"),
+            ["counts"] = Obj(new JsonObject
+            {
+                ["confirmed"] = T("integer"), ["possible"] = T("integer"), ["confirmed_app"] = T("integer"),
+                ["confirmed_database"] = T("integer"), ["confirmed_script"] = T("integer"), ["entry_points"] = T("integer"),
+            }),
+            ["users"] = ArrOf(user), ["entry_points"] = ArrOf(entry), ["truncated"] = T("boolean"),
+        };
     }
 
     private static JsonObject With(JsonObject o, params (string Key, JsonNode? Value)[] extra)
@@ -331,6 +392,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "impact" => Impact,
             "path" => PathTool,
             "source" => SourceTool,
+            "db_usage" => DbUsageTool,
             "report" => Report,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
@@ -419,6 +481,38 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         int context = Num(a, "context", 0, 0, 200), maxLines = Num(a, "max_lines", 200, 1, 2000);
         return (Query(w => GraphQuery.Source(g, id, w, context, maxLines)),
             Structured.Source(g, id, GraphQuery.ReadSource(g, id, context, maxLines)));
+    }
+
+    private (string, JsonObject) DbUsageTool(JsonObject a)
+    {
+        var g = Current();
+        string id = Pick(a, "name");
+        var n = g.GetNode(id)!;
+        if (!DbUsage.IsDbNode(n))
+            throw new ToolException($"{GraphQuery.Label(g, id)} is not a database object or column; db_usage takes a " +
+                                    "table, view, procedure, function or column. Use impact for other things.");
+        int depth = Num(a, "depth", 4, 0, 8);
+        bool possible = a["possible"] is not JsonValue pv || !pv.TryGetValue(out bool b) || b;
+        var res = DbUsage.Find(g, id, depth, possible ? Refs(g) : null);
+        return (Query(w => DbUsage.Write(g, res, w, ids: true)), DbUsage.ToJson(g, res));
+    }
+
+    private RefIndex? _refs;
+    private (Graph Graph, DateTime Stamp)? _refsOf;
+
+    /// <summary>The parse cache's references, loaded again with a new graph or cache; null without a cache.</summary>
+    private RefIndex? Refs(Graph g)
+    {
+        string cache = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(graphPath))!,
+            CodeGraph.Scan.Scanner.CacheFileName);
+        var stamp = File.Exists(cache) ? File.GetLastWriteTimeUtc(cache) : DateTime.MinValue;
+        if (_refsOf is not { } of || of.Graph != g || of.Stamp != stamp)
+        {
+            _refs = stamp == DateTime.MinValue ? null : RefIndex.Load(g, cache);
+            _refsOf = (g, stamp);
+            if (_refs is not null) _log.WriteLine($"codegraph mcp: loaded references from {cache}");
+        }
+        return _refs;
     }
 
     private (string, JsonObject) Search(JsonObject a)

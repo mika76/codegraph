@@ -1,6 +1,6 @@
 namespace CodeGraph;
 
-/// <summary>Command line: codegraph build | show | impact | path | mcp | release-snapshot | init.</summary>
+/// <summary>Command line: codegraph build | show | impact | path | db-usage | mcp | release-snapshot | init.</summary>
 public static class Cli
 {
     private const string Usage = """
@@ -10,6 +10,7 @@ public static class Cli
                 codegraph show <name>                    a project/file/routine/DB object and its connections
                 codegraph impact <name> [--depth N]      what depends on it (directly or indirectly)
                 codegraph path <a> <b> [--max-len N]     how two things are connected (chains up to N steps)
+                codegraph db-usage <name> [--depth N]    who reads/writes a table, column or procedure, up to the screens
                 codegraph mcp                            serve the graph to AI assistants (MCP over stdio)
                 codegraph release-snapshot <ver> [--date yyyy-mm-dd]
                                                          add a release with current project versions to releases.json
@@ -64,6 +65,9 @@ public static class Cli
                 int maxLen = int.TryParse(TakeOption(args, "--max-len"), out var ml) && ml > 0 ? ml : 8;
                 if (args.Count != 2) throw new CodeGraphException("Usage: codegraph path <a> <b> [--max-len N]");
                 return Commands.Path(cfg, args[0], args[1], maxLen);
+            case "db-usage":
+                int usageDepth = int.TryParse(TakeOption(args, "--depth"), out var ud) && ud >= 0 ? ud : 4;
+                return Commands.DbUsage(cfg, Single(args, "name"), usageDepth);
             case "mcp":
                 ExpectNoMore(args);
                 return Commands.Mcp(cfg);
