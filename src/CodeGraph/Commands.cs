@@ -65,15 +65,21 @@ public static class Commands
         return Graph.Load(p);
     }
 
-    public static int Show(Config cfg, string name)
+    public static int Search(Config cfg, string query, string? kind, string? repo, int limit)
     {
-        GraphQuery.Show(LoadGraph(cfg), name, Console.Out);
+        GraphQuery.WriteSearch(LoadGraph(cfg), query, Console.Out, kind, repo, limit);
         return 0;
     }
 
-    public static int Impact(Config cfg, string name, int depth)
+    public static int Show(Config cfg, string name, string? relation = null, string direction = "both", int limit = 40, bool ids = false)
     {
-        GraphQuery.Impact(LoadGraph(cfg), name, Console.Out, depth);
+        GraphQuery.Show(LoadGraph(cfg), name, Console.Out, limit, relation, direction, ids);
+        return 0;
+    }
+
+    public static int Impact(Config cfg, string name, int depth, bool ids = false)
+    {
+        GraphQuery.Impact(LoadGraph(cfg), name, Console.Out, depth, ids);
         return 0;
     }
 
@@ -83,7 +89,7 @@ public static class Commands
         return 0;
     }
 
-    public static int DbUsage(Config cfg, string name, int depth)
+    public static int DbUsage(Config cfg, string name, int depth, bool ids = false)
     {
         var g = LoadGraph(cfg);
         var m = GraphQuery.Resolve(g, name);
@@ -95,7 +101,7 @@ public static class Commands
         if (!Query.DbUsage.IsDbNode(g.GetNode(m.Id!)!))
             throw new CodeGraphException($"{GraphQuery.Label(g, m.Id!)} is not a database object or column. Use impact for other things.");
         var refs = RefIndex.Load(g, System.IO.Path.Combine(cfg.Output, Scanner.CacheFileName));
-        Query.DbUsage.Write(g, Query.DbUsage.Find(g, m.Id!, depth, refs), Console.Out);
+        Query.DbUsage.Write(g, Query.DbUsage.Find(g, m.Id!, depth, refs), Console.Out, ids);
         return 0;
     }
 

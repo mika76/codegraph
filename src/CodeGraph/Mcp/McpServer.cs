@@ -672,20 +672,11 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         string query = Need(a, "query");
         string? kind = Text(a, "kind"), repo = Text(a, "repo");
         int limit = Num(a, "limit", 25, 1, 500);
-        if (kind is not null && !g.Nodes.Any(n => string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)))
-            throw new ToolException($"Unknown kind '{kind}'. Kinds in the graph: " +
-                                    string.Join(", ", g.Nodes.Select(n => n.Kind).Distinct().Order(StringComparer.Ordinal)));
-        if (repo is not null && !g.Nodes.Any(n => n.Kind == "repo" && string.Equals(n.Name, repo, StringComparison.OrdinalIgnoreCase)))
-            throw new ToolException($"Unknown repo '{repo}'. Repositories: " +
-                                    string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
-        var hits = GraphQuery.Search(g, query, kind, repo);
         var w = new StringWriter { NewLine = "\n" };
-        var data = Structured.Search(g, query, hits, limit);
-        if (hits.Count == 0) return ($"Nothing matches '{query}'.\n", data);
-        w.WriteLine($"{hits.Count} match{(hits.Count == 1 ? "" : "es")} for '{query}':");
-        foreach (var h in hits.Take(limit)) w.WriteLine($"  {GraphQuery.Label(g, h)}  {{{h}}}");
-        if (hits.Count > limit) w.WriteLine($"  ... {hits.Count - limit} more (narrow with kind or repo, or raise limit)");
-        return (w.ToString(), data);
+        List<string> hits;
+        try { hits = GraphQuery.WriteSearch(g, query, w, kind, repo, limit); }
+        catch (CodeGraphException e) { throw new ToolException(e.Message); }
+        return (w.ToString(), Structured.Search(g, query, hits, limit));
     }
 
     /// <summary>The node id a name argument means; an ambiguous or unknown name ends the call with a hint.</summary>

@@ -16,7 +16,8 @@ numbers to check. The agent then reads only the few files that matter.
 
    | Question | Command |
    |---|---|
-   | What is X, where is it defined, what does it use, what uses it? | `codegraph show "X"` |
+   | What is it called exactly (find its id)? | `codegraph search "part of the name" [--kind K] [--repo R]` |
+   | What is X, where is it defined, what does it use, what uses it? | `codegraph show "X" [--relation R] [--direction in\|out] [--ids]` |
    | What breaks if I change X? (grouped by application) | `codegraph impact "X" --depth 3` |
    | How does A reach B? | `codegraph path "A" "B"` |
 

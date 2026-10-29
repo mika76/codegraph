@@ -168,6 +168,30 @@ public static class GraphQuery
     }
 
     /// <summary>
+    /// <see cref="Search"/> as text: one line per match with its node id, at most <paramref name="limit"/>. An unknown
+    /// kind or repo is an error that lists the ones in the graph. Returns all the matches.
+    /// </summary>
+    public static List<string> WriteSearch(Graph g, string query, TextWriter w, string? kind = null, string? repo = null, int limit = 25)
+    {
+        if (kind is not null && !g.Nodes.Any(n => string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)))
+            throw new CodeGraphException($"Unknown kind '{kind}'. Kinds in the graph: " +
+                                         string.Join(", ", g.Nodes.Select(n => n.Kind).Distinct().Order(StringComparer.Ordinal)));
+        if (repo is not null && !g.Nodes.Any(n => n.Kind == "repo" && string.Equals(n.Name, repo, StringComparison.OrdinalIgnoreCase)))
+            throw new CodeGraphException($"Unknown repo '{repo}'. Repositories: " +
+                                         string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
+        var hits = Search(g, query, kind, repo);
+        if (hits.Count == 0)
+        {
+            w.WriteLine($"Nothing matches '{query}'.");
+            return hits;
+        }
+        w.WriteLine($"{hits.Count} match{(hits.Count == 1 ? "" : "es")} for '{query}':");
+        foreach (var h in hits.Take(limit)) w.WriteLine($"  {Label(g, h)}  {{{h}}}");
+        if (hits.Count > limit) w.WriteLine($"  ... {hits.Count - limit} more (narrow with kind or repo, or raise the limit)");
+        return hits;
+    }
+
+    /// <summary>
     /// A node, its attributes and its connections grouped by relation. <paramref name="relation"/> and
     /// <paramref name="direction"/> ("in", "out" or "both") filter the connections; <paramref name="ids"/> adds each
     /// neighbour's node id, so a caller can follow it exactly.

@@ -7,7 +7,7 @@ repositories into one cross-repo knowledge graph (`codegraph-out/graph.json`), a
 Machine- and company-specific context is in `CLAUDE.local.md` (git-ignored) when present.
 
 Build the exe with `.\publish.ps1` (-> `publish\codegraph.exe`; the native link step needs the VS C++ workload and
-the script puts `vswhere.exe` on PATH). Run: `.\publish\codegraph.exe build [--full] [--no-vault] | show <name> |
+the script puts `vswhere.exe` on PATH). Run: `.\publish\codegraph.exe build [--full] [--no-vault] | search <text> | show <name> [--relation R] [--direction in|out|both] [--ids] |
 impact <name> [--depth N] | path <a> <b> | db-usage <name> | mcp | release-snapshot <ver> | init`. Without the native toolchain:
 `dotnet run --project src\CodeGraph -c Release -- <command>`.
 Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.json`, `knowledge.json`,

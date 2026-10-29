@@ -16,7 +16,9 @@ Work from the codegraph folder (where `codegraph.json` is):
    endpoints above them), `text_search` (plain text matches, for SQL built at runtime; unlinked hits are what the
    graph missed). When a name matches several things or nothing they return the candidate ids - call again with
    the right id (names are exact; use * as a wildcard). Otherwise use the executable:
-   - `./publish/codegraph.exe show "<name>"` - definition, version, all incoming/outgoing links.
+   - `./publish/codegraph.exe search "<part of a name>" [--kind K] [--repo R]` - find a node and its id.
+   - `./publish/codegraph.exe show "<name>" [--relation R] [--direction in|out] [--ids]` - definition, version,
+     incoming/outgoing links (filtered).
    - `./publish/codegraph.exe impact "<name>" --depth 3` - everything that depends on it, grouped by app.
    - `./publish/codegraph.exe path "<a>" "<b>"` - how two things connect.
    - `./publish/codegraph.exe db-usage "<table, column or proc>"` - its users, possible users and entry points.

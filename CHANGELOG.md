@@ -10,6 +10,9 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 ## [Unreleased]
 
 ### ✨ Added
+- 🔎 **`codegraph search <text>`** (`--kind`, `--repo`, `--limit`): find nodes by part of a name, path or id from
+  the terminal, with their ids - as the MCP `search` tool does. `show` takes `--relation`, `--direction in|out|both`,
+  `--limit` and `--ids`; `impact` and `db-usage` take `--ids`.
 - 🧷 **Prepared ADO commands in VB6**: a module-level `X As [New] ADODB.Command` is a `command` node. The procedure
   named in `X.CommandText = "..."` (also inside `With X`) is executed by the command, the routine that sets it up
   `prepares` it (impact does not follow that), and every routine that runs it (`X.Execute`, `rs.Open X`) executes it
@@ -24,6 +27,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   object, so a link recorded to fill a gap in the code (a call made at runtime) now counts.
 
 ### 🐛 Fixed
+- ⌨️ An unknown command-line option is reported as one (`Unknown option for show: --dir`) instead of "Expected one
+  name, got 3"; a bad number (`--depth two`) is an error instead of being ignored.
 - 🧭 A router push written in a Vue template's event handler (`@click="router.push({ name: 'x' })"`,
   `v-on:click='$router.push("/x")'`) links to its route like one in the script.
 - 🧠 `remember` writes a routine as `Type.Member` (or its node id when that is not unique), not as its bare name, which

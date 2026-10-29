@@ -105,7 +105,9 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 5. **Ask questions**
 
    ```powershell
+   .\publish\codegraph.exe search order             # find things by part of a name, path or id (prints ids)
    .\publish\codegraph.exe show Orders              # a table/project/file/routine and all its connections
+   .\publish\codegraph.exe show Orders --relation writes --direction in --ids   # only who writes it, with ids
    .\publish\codegraph.exe impact Orders            # everything that depends on it, grouped by app
    .\publish\codegraph.exe path frmMain Orders      # how two things are connected
    ```
@@ -121,7 +123,8 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 | After pulling or changing code | `codegraph build` (only changed files are re-read) |
 | Something looks stale or a parser changed | `codegraph build --full` |
 | Only the graph and report, no vault | `codegraph build --no-vault` |
-| "What uses X?" / "What breaks if I change X?" | `codegraph show X` / `codegraph impact X [--depth N]` |
+| "What is it called exactly?" | `codegraph search text [--kind K] [--repo R]` |
+| "What uses X?" / "What breaks if I change X?" | `codegraph show X [--relation R] [--direction in\|out]` / `codegraph impact X [--depth N]` |
 | "How does A reach B?" | `codegraph path A B` |
 | Let an AI assistant query the graph | `codegraph mcp` (started by the MCP client, see the [agents guide](docs/agents.md)) |
 | Cutting a release | `codegraph release-snapshot 2.5` (then edit `releases.json`) |
