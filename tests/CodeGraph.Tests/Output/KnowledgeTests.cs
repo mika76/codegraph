@@ -118,6 +118,48 @@ public sealed class KnowledgeTests : IDisposable
     }
 
     [Fact]
+    public void Repo_knowledge_files_prefer_their_own_repo()
+    {
+        var g = SampleGraph.Create();
+        const string webMain = "file:Web:Sales/frmMain.frm";
+        g.Node("repo:Web", ("kind", "repo"), ("name", "Web"));
+        g.Node(webMain, ("kind", "file"), ("name", "frmMain.frm"), ("path", "Sales/frmMain.frm"), ("repo", "Web"));
+        string shop = Path.Combine(_dir, "Shop"), web = Path.Combine(_dir, "Web");
+        Directory.CreateDirectory(Path.Combine(shop, ".codegraph"));
+        Directory.CreateDirectory(Path.Combine(web, ".codegraph"));
+        File.WriteAllText(Path.Combine(web, ".codegraph", "knowledge.json"), """
+            { "facts": [
+                ["Sales/frmMain.frm", "shows", "Orders"],
+                ["Sales/Gone.frm", "shows", "Orders"],
+                ["db:usp_Save", "is slow on", "Orders"],
+              ],
+              "notes": { "Sales/frmMain.frm": "web copy" } }
+            """);
+        File.WriteAllText(Path.Combine(shop, ".codegraph", "team.json"), """{ "notes": { "Sales/frmMain.frm": "shop copy" } }""");
+        var cfg = new Config
+        {
+            Repos = [new RepoConfig { Name = "Shop", Path = shop }, new RepoConfig { Name = "Web", Path = web }],
+            RepoKnowledge = [".codegraph/knowledge.json", ".codegraph/t*.json"],
+        };
+        var files = KnowledgeLoader.KnowledgeFiles(cfg);
+        Assert.Equal(["Shop", "Web"], files.Select(f => f.Repo!).Order().ToArray());
+
+        var warnings = new List<string>();
+        KnowledgeLoader.ApplyKnowledge(g, files, warnings);
+        Assert.NotNull(g.GetEdge(webMain, "db:Orders", "shows"));
+        Assert.Null(g.GetEdge(SampleGraph.FMain, "db:Orders", "shows"));
+        Assert.Equal("web copy", (string)g.GetNode(webMain)!["knowledge_notes"]![0]!);
+        Assert.Equal("shop copy", (string)g.GetNode(SampleGraph.FMain)!["knowledge_notes"]![0]!);
+        // node ids work as names; an unknown path is skipped, not turned into a concept
+        Assert.NotNull(g.GetEdge("db:usp_Save", "db:Orders", "is_slow_on"));
+        Assert.DoesNotContain(g.Nodes, n => n.Kind == "concept");
+        Assert.Contains(warnings, w => w.Contains("Web: knowledge.json: 'Sales/Gone.frm' is not in the graph"));
+
+        Assert.Equal(Path.Combine(web, ".codegraph/knowledge.json"), KnowledgeLoader.RepoKnowledgeFile(cfg, web));
+        Assert.Empty(KnowledgeLoader.KnowledgeFiles(new Config { Repos = cfg.Repos, RepoKnowledge = [] }));
+    }
+
+    [Fact]
     public void Name_index_prefers_projects_and_matches_output_names()
     {
         var idx = new NameIndex(SampleGraph.Create());

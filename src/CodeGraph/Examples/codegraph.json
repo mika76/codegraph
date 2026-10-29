@@ -12,6 +12,9 @@
   "releases": "./releases.json",
   "releases_from_branches": true,   // a repo checked out on e.g. R2.4.0 -> its projects are part of release 2.4.0
   "knowledge": ["./knowledge.json"],
+  // Knowledge files inside each repo (relative to its root), committed with its code and read by every graph
+  // that scans it. Give a graph its own name here to keep its knowledge apart; [] turns it off.
+  "repo_knowledge": [".codegraph/knowledge.json"],
 
   // Name prefixes of your stored procedures: a string like "usp_Foo" that matches no DB object is then
   // reported as "called from code but not found"

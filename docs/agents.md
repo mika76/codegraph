@@ -29,14 +29,20 @@ numbers to check. The agent then reads only the few files that matter.
 3. **Mention the blind spots** when they matter: calls through untyped variables (VB6 `Object`/`Variant`, late
    binding, reflection), SQL or URLs assembled at runtime, and anything ambiguous (skipped, never guessed).
 4. **Rebuild after changing code**: `codegraph build` takes a few seconds when little changed.
+5. **Record what the graph didn't know.** When the agent establishes something the graph can't show - a call made
+   through a URL built at runtime, what a table or setting is for, a rule the user explains - it offers to record it
+   as a fact or note with the `remember` tool (or by editing the knowledge file). Facts about a repo's nodes go to
+   that repo's `.codegraph/knowledge.json`, committed with its code, so the next session and everyone else who
+   graphs that repo know it too. Only checked facts belong there; a link that is missing again and again points
+   to a parser gap instead.
 
 ## MCP server: the graph as tools
 
 `codegraph mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any MCP client (Claude
 Code, Claude Desktop, Cursor, VS Code / Copilot, Codex, Gemini CLI, ...) can then query the graph through tools
 instead of running the executable and reading its output. The client starts the server and talks to it over
-stdin/stdout. Nothing listens on the network, and the server only reads: the graph, the report, and the source
-files that the `source` tool shows.
+stdin/stdout. Nothing listens on the network. The server reads the graph, the report, and the source files that
+the `source` tool shows; the only thing it writes is a fact or note added with `remember`, to a knowledge file.
 
 | Tool | Arguments | Returns |
 |---|---|---|
@@ -49,6 +55,7 @@ files that the `source` tool shows.
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
 | `text_search` | `text`, `repo?`, `whole_word?`, `limit?` | plain text matches of a name in the scanned files (ignore rules respected), each with the routine it is in and whether the graph already links that routine to something of that name - for dynamic SQL the graph missed |
 | `status` | - | when the graph was built, its size, and each repository's branch and commit then and now (`changed`: rebuild to catch up) |
+| `remember` | `subject`, `relation?` + `object?` or `note?`, `source` | adds a fact or note to the subject's repo knowledge file (`repo_knowledge`), or to the first `knowledge` file for anything else; comments and entries already there are kept, `source` is written as a comment, and it shows up after the next build |
 
 `search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
 `{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:order*`,
@@ -103,7 +110,8 @@ Two shapes recur everywhere:
 | `report` | `{ section?, text, sections: [heading] }` |
 | `db_usage` | `{ target, depth, possible_checked, counts, users: [user], entry_points: [entry], truncated }` (see below) |
 | `text_search` | `{ query, total, files_searched, files_with_hits, truncated, hits: [{ repo, file, file_id, line, column, text, confidence: "text", node?, linked? }] }` |
-| `status` | `{ version, graph: { path, generated, modified_utc, nodes, edges }, report, cache, repos: [{ name, path, exists, branch, commit, current_branch, current_commit, changed }] }` |
+| `status` | `{ version, graph: { path, generated, modified_utc, nodes, edges }, report, cache, repos: [{ name, path, exists, branch, commit, current_branch, current_commit, changed }] }` |
+| `remember` | `{ recorded, message }` |
 
 A failed call (`isError: true`) returns `{ error, candidates? }`, with the matching or closest nodes when a name
 did not pick exactly one. A capped argument adds `notes`.

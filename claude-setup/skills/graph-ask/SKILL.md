@@ -1,7 +1,7 @@
 ---
 name: graph-ask
 description: Answer questions about our codebase (who uses X, what breaks if I change Y, how is A connected to B, which screens call this API / table / proc) using the code graph instead of grepping the repos. Use for impact analysis and cross-repo questions about VB6, C#, SQL, Vue, installers.
-allowed-tools: mcp__codegraph Bash(./publish/codegraph.exe *) Read Grep
+allowed-tools: mcp__codegraph Bash(./publish/codegraph.exe *) Read Grep Edit
 ---
 
 Question: $ARGUMENTS
@@ -24,3 +24,9 @@ Work from the codegraph folder (where `codegraph.json` is):
    because the parser is pattern-based and can miss late-bound/dynamic calls.
 4. Answer concisely: the direct answer, grouped by app/repo, with file:line references, and note any
    blind spots (dynamic SQL, VB6 late binding, URLs built at runtime).
+5. Record what the graph didn't know. If you established something it doesn't show (a link it misses, what a
+   table, setting or screen is for, a rule the user told you), propose it as a fact or note at the end of your
+   answer. On yes, call the MCP `remember` tool (subject; relation + object, or note; source = where you verified
+   it). Without MCP, add it by hand to the repo's `.codegraph/knowledge.json` (or the central knowledge file),
+   keeping its comments. Record only what you checked or were told, never links the graph already has; a kind of
+   link that is missing again and again is a parser gap to mention, not facts to record one by one.

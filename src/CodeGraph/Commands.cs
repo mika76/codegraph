@@ -26,7 +26,7 @@ public static class Commands
         var warnings = new List<string>();
         if (cfg.ReleasesFromBranches) KnowledgeLoader.ApplyBranchReleases(g);
         KnowledgeLoader.ApplyReleases(g, cfg.Releases, warnings);
-        KnowledgeLoader.ApplyKnowledge(g, cfg.Knowledge, warnings);
+        KnowledgeLoader.ApplyKnowledge(g, KnowledgeLoader.KnowledgeFiles(cfg), warnings);
         g.Meta["generated"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         g.Meta["repos"] = new JsonArray(cfg.Repos
             .Select(r => (JsonNode?)new JsonObject { ["name"] = r.Name, ["path"] = r.Path }).ToArray());
@@ -103,7 +103,8 @@ public static class Commands
         // stdout carries only protocol messages; anything else written to Console.Out goes to stderr
         Console.SetOut(Console.Error);
         Console.Error.WriteLine($"codegraph mcp {Cli.Version}: serving {GraphPath(cfg)}");
-        new Mcp.McpServer(GraphPath(cfg), System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md"), config: cfg)
+        new Mcp.McpServer(GraphPath(cfg), System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md"), knowledge: KnowledgeTargets.From(cfg),
+            config: cfg)
             .Run(input, output, Console.Error);
         return 0;
     }
