@@ -9,7 +9,7 @@ namespace CodeGraph.Mcp;
 /// A Model Context Protocol server over stdio: JSON-RPC 2.0, one message per line. It exposes the graph queries as
 /// read-only tools. graph.json is loaded on first use and loaded again when a build has rewritten it.
 /// </summary>
-public sealed class McpServer(string graphPath, string reportPath, string? exePath = null)
+public sealed class McpServer(string graphPath, string reportPath, string? exePath = null, Config? config = null)
 {
     // the executable this server runs from and its time stamp at start, to notice a newer build on disk
     private readonly string? _exe = exePath ?? Environment.ProcessPath;
@@ -225,6 +225,22 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             {
                 ["section"] = Str("Section to return: any part of its heading, e.g. \"orphan\" or \"not found\"."),
             }),
+        Tool("text_search",
+            "Plain text search for a name in the configured repositories (the files a build reads, ignore rules " +
+            "respected), for what the graph can't link: SQL built at runtime, names in config files, late binding. " +
+            "Each hit is a text match only, with the routine it is in; linked = the graph already links that routine " +
+            "to something of that name, so unlinked hits are the ones the graph may have missed.",
+            new JsonObject
+            {
+                ["text"] = Str("The name to look for, e.g. a table, column or procedure name (case is ignored)."),
+                ["repo"] = Str("Only this repository."),
+                ["whole_word"] = new JsonObject
+                {
+                    ["type"] = "boolean", ["default"] = true,
+                    ["description"] = "Only matches not inside a longer identifier (Orders, not OrdersArchive).",
+                },
+                ["limit"] = Int("Most hits to return.", 100),
+            }, "text"),
         Tool("status",
             "When the graph was built, its size, and the branch and commit of each repository then and now (changed " +
             "= the graph may be out of date; run codegraph build).",
@@ -321,6 +337,23 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                 ["lines"] = ArrOf(T("string")), ["more_lines"] = T("integer"), ["problem"] = T("string"),
             },
             "db_usage" => DbUsageSchema(),
+            "text_search" => new JsonObject
+            {
+                ["query"] = T("string"), ["total"] = T("integer"), ["files_searched"] = T("integer"),
+                ["files_with_hits"] = T("integer"), ["truncated"] = T("boolean"),
+                ["hits"] = ArrOf(Obj(new JsonObject
+                {
+                    ["repo"] = T("string"), ["file"] = T("string"), ["file_id"] = T("string"), ["line"] = T("integer"),
+                    ["column"] = T("integer"), ["text"] = Str("The line, trimmed."),
+                    ["confidence"] = new JsonObject { ["type"] = "string", ["enum"] = new JsonArray("text") },
+                    ["node"] = NodeSchema(),
+                    ["linked"] = new JsonObject
+                    {
+                        ["type"] = "boolean",
+                        ["description"] = "The graph already links the routine (or file) to something of that name.",
+                    },
+                }, "repo", "file", "file_id", "line", "column", "text", "confidence")),
+            },
             "status" => new JsonObject
             {
                 ["version"] = T("string"),
@@ -415,6 +448,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "source" => SourceTool,
             "db_usage" => DbUsageTool,
             "report" => Report,
+            "text_search" => TextSearchTool,
             "status" => Status,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
@@ -517,6 +551,21 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         bool possible = a["possible"] is not JsonValue pv || !pv.TryGetValue(out bool b) || b;
         var res = DbUsage.Find(g, id, depth, possible ? Refs(g) : null);
         return (Query(w => DbUsage.Write(g, res, w, ids: true)), DbUsage.ToJson(g, res));
+    }
+
+    private (string, JsonObject) TextSearchTool(JsonObject a)
+    {
+        if (config is null) throw new ToolException("text_search needs the config: run the server as  codegraph mcp --config <file>");
+        string text = Need(a, "text");
+        if (text.Length < 2) throw new ToolException("text must be at least 2 characters");
+        string? repo = Text(a, "repo");
+        if (repo is not null && !config.Repos.Any(r => string.Equals(r.Name, repo, StringComparison.OrdinalIgnoreCase)))
+            throw new ToolException($"Unknown repo '{repo}'. Repositories: " + string.Join(", ", config.Repos.Select(r => r.Name)));
+        bool wholeWord = a["whole_word"] is not JsonValue wv || !wv.TryGetValue(out bool ww) || ww;
+        int limit = Num(a, "limit", 100, 1, 2000);
+        Graph? g = File.Exists(graphPath) ? Current() : null;
+        var res = TextSearch.Find(config, text, repo, wholeWord);
+        return (Query(w => TextSearch.Write(g, res, w, limit)), TextSearch.ToJson(g, res, limit));
     }
 
     /// <summary>When the graph was built, from which branch and commit of each repo, and whether those have moved since.</summary>

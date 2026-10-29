@@ -19,6 +19,10 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   database objects; possible users (strings and SQL that name it but were not linked, from the parse cache, marked
   `possible`); and the forms, components, views, client routes and API endpoints above them, found by walking up
   the callers. Made for "used by" panels and rename / drop previews.
+- 🔎 **`text_search` MCP tool**: plain text search for a name in the configured repositories (the files a build
+  reads, ignore rules respected), for what the graph cannot link - SQL built at runtime, names in config files.
+  Each hit is marked as a text match, with the routine it is in and whether the graph already links that routine to
+  something of that name.
 - 🩺 **`status` MCP tool**: when the graph was built, its size, and each repository's branch and commit then and now
   (`changed` = rebuild to catch up). Repository nodes now record the `commit` they were built from.
 

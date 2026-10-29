@@ -76,7 +76,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   `graph.json` is written to a temp file and swapped in (readers like the MCP server never see a partial file).
 - `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
   every tool returns text plus `structuredContent` (built in `Query/Structured.cs`, schemas in `OutputSchema`);
-  tools search/show/impact/path/source/db_usage/report/status wrap `GraphQuery` (`db_usage`: `Query/DbUsage.cs`, possible
+  tools search/show/impact/path/source/db_usage/report/text_search/status wrap `GraphQuery` (`db_usage`: `Query/DbUsage.cs`, possible
   users from the parse cache via `Query/RefIndex.cs`); reloads graph.json when its mtime changes.
   stdout is protocol only - log to stderr.
 

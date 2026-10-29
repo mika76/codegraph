@@ -132,7 +132,7 @@ This is where codegraph shines: instead of grepping repo by repo, an agent (Clau
 ...) asks the graph "what breaks if I change X?" and gets every caller and app with `file:line` to check.
 
 - **Any MCP client** (Claude Code, Cursor, VS Code, ...): `codegraph mcp` serves the graph as tools - `search`,
-  `show`, `impact`, `path`, `source`, `db_usage`, `report`, `status` (text for the agent plus `structuredContent` for
+  `show`, `impact`, `path`, `source`, `db_usage`, `text_search`, `report`, `status` (text for the agent plus `structuredContent` for
   programs). Register it once, e.g.
   `claude mcp add codegraph --scope user -- C:\src\codegraph\publish\codegraph.exe mcp --config C:\src\codegraph\codegraph.json`.
 - **Claude Code:** `claude-setup\install.ps1` installs three skills: `/graph-ask` (answer "who uses / what breaks"

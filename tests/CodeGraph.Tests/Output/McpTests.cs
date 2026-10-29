@@ -78,7 +78,7 @@ public sealed class McpTests : IDisposable
     public void Lists_read_only_tools_with_schemas()
     {
         var tools = Request(Server(), "tools/list")["result"]!["tools"]!.AsArray();
-        Assert.Equal(["search", "show", "impact", "path", "source", "db_usage", "report", "status"], tools.Select(t => (string)t!["name"]!));
+        Assert.Equal(["search", "show", "impact", "path", "source", "db_usage", "report", "text_search", "status"], tools.Select(t => (string)t!["name"]!));
         foreach (var t in tools)
         {
             Assert.Equal("object", (string)t!["inputSchema"]!["type"]!);
@@ -395,6 +395,35 @@ public sealed class McpTests : IDisposable
         var (text, err) = Call(s, "db_usage", new JsonObject { ["name"] = "frmMain.Save" });
         Assert.True(err);
         Assert.Contains("is not a database object or column", text);
+    }
+
+    [Fact]
+    public void Text_search_finds_whole_words_in_scanned_files_and_says_what_is_linked()
+    {
+        string repo = Path.Combine(_dir, "Shop");
+        Directory.CreateDirectory(Path.Combine(repo, "Sales"));
+        Directory.CreateDirectory(Path.Combine(repo, "bin"));
+        var lines = Enumerable.Range(1, 20).Select(i => $"' line {i}").ToArray();
+        lines[11] = "    sql = \"UPDATE \" & \"Orders SET Status = 1\"";  // line 12, inside Save (10-14)
+        lines[15] = "    ' OrdersArchive is another table";
+        File.WriteAllLines(Path.Combine(repo, "Sales", "frmMain.frm"), lines);
+        File.WriteAllText(Path.Combine(repo, "Sales", "Old.bas"), "Attribute VB_Name = \"Old\"\nx = \"orders\"\n");
+        File.WriteAllText(Path.Combine(repo, "Sales", "notes.bin"), "Orders");  // not a file the build reads
+        var g = SampleGraph.Create();
+        g.Node("repo:Shop", ("path", repo));
+        g.Save(GraphPath);
+        var cfg = new Config { Repos = [new RepoConfig { Name = "Shop", Path = repo }] };
+        var s = new McpServer(GraphPath, ReportPath, config: cfg);
+        var d = Data(s, "text_search", new JsonObject { ["text"] = "Orders" });
+        var hits = d["hits"]!.AsArray();
+        Assert.Equal(2, (int)d["total"]!);
+        Assert.Equal(("Sales/frmMain.frm", 12, "text"), ((string)hits[0]!["file"]!, (int)hits[0]!["line"]!, (string)hits[0]!["confidence"]!));
+        Assert.Equal(SampleGraph.Save, (string)hits[0]!["node"]!["id"]!);
+        Assert.True((bool)hits[0]!["linked"]!);  // Save writes Orders
+        Assert.Equal(("Sales/Old.bas", 2, false), ((string)hits[1]!["file"]!, (int)hits[1]!["line"]!, (bool)hits[1]!["linked"]!));
+        Assert.Equal(3, (int)Data(s, "text_search", new JsonObject { ["text"] = "orders", ["whole_word"] = false })["total"]!);
+        Assert.Contains("Shop/Sales/frmMain.frm:12  (in frmMain.Save)  [linked]  sql = ", Call(s, "text_search", new JsonObject { ["text"] = "Orders" }).Text);
+        Assert.True(Call(Server(), "text_search", new JsonObject { ["text"] = "Orders" }).IsError); // no config
     }
 
     [Fact]
