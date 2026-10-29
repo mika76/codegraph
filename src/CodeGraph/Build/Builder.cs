@@ -108,6 +108,11 @@ public sealed partial class Builder
     private readonly Dictionary<string, Dictionary<string, List<string>>> _fileValues = [];
     /// <summary>VB: public enum members and public module constants, usable by bare name across visible projects.</summary>
     private readonly Dictionary<(string?, string), List<string>> _globalValues = [];
+    /// <summary>VB: module-level ADODB.Command variables by file, and the public ones of .bas modules by name.</summary>
+    private readonly Dictionary<string, Dictionary<string, List<string>>> _fileCommands = [];
+    private readonly Dictionary<(string?, string), List<string>> _globalCommands = [];
+    /// <summary>Routines that run a command (caller, command, line): they get the command's database links.</summary>
+    private readonly List<(string Caller, string Command, int? Line)> _commandRuns = [];
     private readonly Dictionary<(string?, string), HashSet<string>> _bases = [];
     private readonly Dictionary<string, string> _vbGlobals = [];
     private readonly Dictionary<string, string> _symFile = [];
@@ -143,6 +148,7 @@ public sealed partial class Builder
         Reachability();
         Items();
         ResolveRefs();
+        CommandRuns();
         MemberOverrides();
         ItemReferences();
         Rollups();
@@ -517,6 +523,12 @@ public sealed partial class Builder
                                     (s.Kind == "enum_member" || r.Rel.EndsWith(".bas", StringComparison.OrdinalIgnoreCase));
                     if (vbGlobal) GetOrAdd(_globalValues, (fam, nameLow)).Add(sid);
                 }
+                else if (s.Kind == "command")
+                {
+                    GetOrAdd(GetOrAdd(_fileCommands, fid), nameLow).Add(sid);
+                    if (s.Visibility == "public" && r.Rel.EndsWith(".bas", StringComparison.OrdinalIgnoreCase))
+                        GetOrAdd(_globalCommands, (fam, nameLow)).Add(sid);
+                }
             }
             _fileSyms[fid] = local;
             if (f.Extra?["globals"] is JsonArray globals)
@@ -776,6 +788,37 @@ public sealed partial class Builder
         }
     }
 
+    /// <summary>The VB module-level ADODB.Command a name means here: this file's, else one public command visible from it.</summary>
+    private string? CommandFor(string fid, string? name)
+    {
+        if (string.IsNullOrEmpty(name)) return null;
+        string low = name.ToLowerInvariant();
+        if (_fileCommands.GetValueOrDefault(fid)?.GetValueOrDefault(low) is [var own]) return own;
+        return Pick(fid, _globalCommands.GetValueOrDefault(("vb", low)) ?? []) is [var global] ? global : null;
+    }
+
+    private bool RunCommand(string caller, string command, int? line)
+    {
+        if (caller == command) return false;
+        _commandRuns.Add((caller, command, line));
+        return Edge(caller, command, "executes", ("line", (JsonNode?)line));
+    }
+
+    /// <summary>
+    /// A routine that runs a prepared command runs what it was prepared with: it gets the command's executes / reads /
+    /// writes links (via the command), so impact and db_usage reach it - the routine that only set the command up
+    /// "prepares" it, which impact does not follow.
+    /// </summary>
+    private void CommandRuns()
+    {
+        if (_commandRuns.Count == 0) return;
+        var outgoing = _g.OutEdges();
+        foreach (var (caller, command, line) in _commandRuns)
+            foreach (var e in outgoing.GetValueOrDefault(command) ?? [])
+                if (e.Relation is "executes" or "reads" or "writes" or "calls" && e.Target != caller)
+                    _g.AddEdge(caller, e.Target, e.Relation, attrs: [("line", line), ("via", N(command).Name)]);
+    }
+
     private bool EdgeToTargets(string caller, IEnumerable<string> targets, string rel, params (string, JsonNode?)[] attrs)
     {
         bool ok = false;
@@ -956,9 +999,16 @@ public sealed partial class Builder
                     return EdgeToTargets(caller, tg, "instantiates", lineAttr);
                 return false;
             }
+            case "command_use": // rs.Open cmd
+                return fam == "vb" && CommandFor(fid, name) is { } opened && RunCommand(caller, opened, line);
             case "member":
             {
                 string qual = rf.Qual ?? "";
+                // a prepared ADODB.Command: Execute runs it, anything else (CommandText, Parameters...) sets it up
+                if (fam == "vb" && CommandFor(fid, qual) is { } command)
+                    return name.Equals("Execute", StringComparison.OrdinalIgnoreCase)
+                        ? RunCommand(caller, command, line)
+                        : caller != command && Edge(caller, command, "prepares", lineAttr);
                 string? qtype = rf.QualType;
                 if (string.IsNullOrEmpty(qtype) && fam == "vb") qtype = _vbGlobals.GetValueOrDefault(qual.ToLowerInvariant());
                 string tname = LastPart(!string.IsNullOrEmpty(qtype) ? qtype : qual);

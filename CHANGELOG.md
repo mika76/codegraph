@@ -9,6 +9,13 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### ✨ Added
+- 🧷 **Prepared ADO commands in VB6**: a module-level `X As [New] ADODB.Command` is a `command` node. The procedure
+  named in `X.CommandText = "..."` (also inside `With X`) is executed by the command, the routine that sets it up
+  `prepares` it (impact does not follow that), and every routine that runs it (`X.Execute`, `rs.Open X`) executes it
+  and its procedure (`via` the command). Before, the setup routine was credited with every procedure, and the real
+  callers were missing from `impact` and `db_usage`.
+
 ### 🔄 Changed
 - 🧠 `impact` (and the entry points of `db_usage`) follow knowledge facts: the subject of a fact depends on its
   object, so a link recorded to fill a gap in the code (a call made at runtime) now counts.

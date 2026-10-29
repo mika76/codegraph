@@ -76,6 +76,12 @@ public static partial class Vb6Parser
     private static partial Regex ConstDecl();
     [GeneratedRegex(@"^\s*([A-Za-z_]\w*)[$%&!#@]?\s*(?:As\s+[\w.]+\s*)?=\s*(.+)$", O)]
     private static partial Regex ConstItem();
+    /// <summary>X.CommandText = ... (or .CommandText = ... inside With X): what an ADODB.Command runs.</summary>
+    [GeneratedRegex(@"^\s*([A-Za-z_]\w*)?\s*\.\s*CommandText\s*=", O)]
+    private static partial Regex CommandTextRe();
+    /// <summary>rs.Open cmd: a recordset opened from a command runs it.</summary>
+    [GeneratedRegex(@"\.\s*Open\s*\(?\s*([A-Za-z_]\w*)\b", O)]
+    private static partial Regex OpenCommandRe();
 
     /// <summary>Split on commas that are not inside quotes or parentheses.</summary>
     private static List<string> SplitTop(string s)
@@ -192,6 +198,7 @@ public static partial class Vb6Parser
         var symbols = facts.Symbols;
         var refs = facts.Refs;
         var moduleVars = new Dictionary<string, (string Type, string Vis)>();
+        var commandVars = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         var vbnetTypes = new List<VbType>();
         if (lang == "vbnet")
@@ -352,7 +359,18 @@ public static partial class Vb6Parser
                     {
                         string vis = m.Groups[1].Value.ToLowerInvariant();
                         foreach (Match vm in VarItem().Matches(m.Groups[2].Value))
+                        {
                             moduleVars[vm.Groups[1].Value.ToLowerInvariant()] = (vm.Groups[3].Value, vis);
+                            // a prepared ADODB.Command kept for the whole module or program: the routines that run it
+                            // run its procedure, not the one that set it up
+                            if (!vm.Groups[3].Value.Equals("ADODB.Command", StringComparison.OrdinalIgnoreCase)) continue;
+                            symbols.Add(new Symbol
+                            {
+                                Name = vm.Groups[1].Value, Kind = "command", Line = i + 1, Parent = containerFor(i + 1),
+                                Visibility = vis is "public" or "global" ? "public" : "private",
+                            });
+                            commandVars.Add(vm.Groups[1].Value);
+                        }
                     }
                 }
             }
@@ -449,6 +467,13 @@ public static partial class Vb6Parser
                     }
                     else Add(new Ref { Kind = "id", Name = head, Line = k + 1 });
                 }
+                foreach (Match om in OpenCommandRe().Matches(ln))
+                {
+                    // only a guess until the name turns out to be a command
+                    var open = new Ref { Kind = "command_use", Name = om.Groups[1].Value, Line = k + 1 };
+                    open.X["candidate"] = true;
+                    Add(open);
+                }
                 if (withStack.Count > 0)
                     foreach (Match lm in LeadingMemberRe().Matches(ln))
                     {
@@ -484,15 +509,41 @@ public static partial class Vb6Parser
                 if (r.Kind is "new" or "type") refs.Add(r);
         }
 
+        // the lines that set a module-level command's CommandText (with their continuation lines)
+        var commandAtLine = new Dictionary<int, string>();
+        if (commandVars.Count > 0)
+            foreach (var r in routines)
+            {
+                var withs = new List<string>();
+                for (int k = r.Start; k <= r.End; k++)
+                {
+                    string ln = codeLines[k];
+                    var wm = WithRe().Match(ln);
+                    if (wm.Success) { withs.Add(wm.Groups[1].Value); continue; }
+                    if (EndWithRe().IsMatch(ln) && withs.Count > 0) { withs.RemoveAt(withs.Count - 1); continue; }
+                    var cm = CommandTextRe().Match(ln);
+                    if (!cm.Success) continue;
+                    string? target = cm.Groups[1].Success ? cm.Groups[1].Value : withs.Count > 0 ? withs[^1] : null;
+                    if (target is null || !commandVars.TryGetValue(target, out var command)) continue;
+                    for (int j = k; j <= r.End; j++)
+                    {
+                        commandAtLine[j + 1] = command;
+                        if (!codeLines[j].TrimEnd().EndsWith(" _", StringComparison.Ordinal)) break;
+                    }
+                }
+            }
+
         // ---- strings -> SQL / literals, attributed to the routine they sit in
-        // (outside routines, a string in a Const declaration belongs to that constant)
+        // (outside routines, a string in a Const declaration belongs to that constant, a string in a module-level
+        // command's CommandText to the command)
         var order = new List<(int Ri, string? Const)>();
         var byOwner = new Dictionary<(int Ri, string? Const), List<(int Line, string S)>>();
         foreach (var (pos, s) in strings)
         {
             int line = li.Line(pos);
             int ri = line - 1 >= 0 && line - 1 < ownerOfLine.Length ? ownerOfLine[line - 1] : -1;
-            var key = (ri, ri < 0 ? constAtLine.GetValueOrDefault(line) : null);
+            (int Ri, string? Const) key = commandAtLine.TryGetValue(line, out var command) ? (-1, command)
+                : (ri, ri < 0 ? constAtLine.GetValueOrDefault(line) : null);
             if (!byOwner.TryGetValue(key, out var list))
             {
                 byOwner[key] = list = [];

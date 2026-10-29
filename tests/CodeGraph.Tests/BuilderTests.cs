@@ -624,6 +624,73 @@ public class BuilderTests
     }
 
     [Fact]
+    public void A_prepared_ado_command_is_run_by_the_routine_that_executes_it()
+    {
+        static FileFacts Vb6(string rel, string text)
+        {
+            var f = CodeGraph.Parsers.Vb6Parser.Parse(rel, text);
+            DbAccess.Mark(rel, text, f);
+            return f;
+        }
+        var proc = CodeGraph.Parsers.SqlParser.Parse("p.sql", "CREATE PROCEDURE dbo.close_order @id int AS UPDATE Orders SET Status = 2 WHERE Id = @id");
+        var other = CodeGraph.Parsers.SqlParser.Parse("q.sql", "CREATE PROCEDURE dbo.list_orders AS SELECT Id FROM Orders");
+        var orders = CodeGraph.Parsers.SqlParser.Parse("Orders.sql", "CREATE TABLE dbo.Orders (Id int, Status int)");
+        var procs = Vb6("Common/modProcs.bas", """
+            Attribute VB_Name = "modProcs"
+            Global Close_Order As New ADODB.Command
+            Public List_Orders As ADODB.Command
+            Public Sub Init_Parameters()
+                Close_Order.CommandText = "close_order"
+                Close_Order.CommandType = adCmdStoredProc
+                Close_Order.Parameters.Append Close_Order.CreateParameter("id", adInteger, adParamInput)
+                Set List_Orders = New ADODB.Command
+                With List_Orders
+                    .CommandText = "list_orders"
+                End With
+            End Sub
+            """);
+        var form = Vb6("App/frmOrder.frm", """
+            VERSION 5.00
+            Begin VB.Form frmOrder
+            End
+            Attribute VB_Name = "frmOrder"
+            Private Sub cmdClose_Click()
+                Close_Order.Parameters("id").Value = mId
+                Close_Order.Execute
+            End Sub
+            Private Sub Form_Load()
+                rs.Open List_Orders
+            End Sub
+            """);
+        var g = Build(Cfg("Shop"), Rec("Db/p.sql", proc), Rec("Db/q.sql", other), Rec("Db/Orders.sql", orders),
+            Rec("Common/modProcs.bas", procs), Rec("App/frmOrder.frm", form));
+
+        const string cmd = "sym:Shop:Common/modProcs.bas#modProcs.Close_Order";
+        const string list = "sym:Shop:Common/modProcs.bas#modProcs.List_Orders";
+        const string init = "sym:Shop:Common/modProcs.bas#modProcs.Init_Parameters";
+        const string click = "sym:Shop:App/frmOrder.frm#frmOrder.cmdClose_Click";
+        const string load = "sym:Shop:App/frmOrder.frm#frmOrder.Form_Load";
+        Assert.Equal("command", g.GetNode(cmd)!.Kind);
+        Assert.True(HasEdge(g, cmd, "db:close_order", "executes"));
+        Assert.True(HasEdge(g, list, "db:list_orders", "executes"));
+        // the setup routine only prepares the commands
+        Assert.True(HasEdge(g, init, cmd, "prepares"));
+        Assert.True(HasEdge(g, init, list, "prepares"));
+        Assert.False(HasEdge(g, init, "db:close_order", "executes"));
+        // the routines that run them execute the procedures, via the command
+        Assert.True(HasEdge(g, click, cmd, "executes"));
+        Assert.Equal("Close_Order", g.GetEdge(click, "db:close_order", "executes")!.Str("via"));
+        Assert.True(HasEdge(g, click, cmd, "prepares")); // setting a parameter value
+        Assert.True(HasEdge(g, load, "db:list_orders", "executes"));
+
+        var w = new StringWriter { NewLine = "\n" };
+        CodeGraph.Query.GraphQuery.Impact(g, "close_order", w, depth: 2);
+        string impact = w.ToString();
+        Assert.Contains("cmdClose_Click", impact);
+        Assert.DoesNotContain("Init_Parameters", impact);
+    }
+
+    [Fact]
     public void Columns_in_dynamic_sql_and_three_part_names_are_linked()
     {
         var orders = CodeGraph.Parsers.SqlParser.Parse("Orders.sql", "CREATE TABLE dbo.Orders (Id int, Total money, Status int)");
