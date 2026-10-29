@@ -30,7 +30,7 @@ public static class Report
     private static string Fmt(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
 
     public static string BuildReport(Graph g, IReadOnlyDictionary<string, int> stats, IReadOnlyDictionary<string, int> unresolved,
-        IReadOnlyList<ParseError> errors, IReadOnlyList<string> warnings)
+        IReadOnlyList<ParseError> errors, IReadOnlyList<string> warnings, IReadOnlyList<string>? review = null)
     {
         var v = new Views(g);
         var nodes = g.Nodes;
@@ -183,6 +183,12 @@ public static class Report
             Sec($"Parse errors ({errors.Count})", el);
         }
         else Sec("Parse errors (0)", ["_none_", ""]);
+        review ??= [];
+        Sec($"Knowledge to review ({review.Count})", review.Count > 0 ? [.. review.Select(r => $"- {r}"), ""] : ["_none_", ""],
+            review.Count > 0
+                ? "Facts and notes in your knowledge files that no longer match the code, or that the graph now links by itself. " +
+                  "Fix or remove them (or ask an agent to, e.g. with /graph-review-knowledge)."
+                : null);
         if (warnings.Count > 0)
         {
             var wl = warnings.Select(w => $"- {w}").ToList();

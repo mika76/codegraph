@@ -69,7 +69,7 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   `Url.Action` endpoints (`X["conventional"]`) resolve to `<Ctrl>Controller.<Action>` in the same repo first.
   C# interface calls also link to implementations.
 - `Model/Graph.cs` - nodes/edges whose attributes are `JsonObject`s (written as-is to graph.json).
-- `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes plus per-repo `repo_knowledge` files whose names resolve in that repo first, release-snapshot; `KnowledgeWriter` inserts a fact/note as text so comments survive),
+- `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes plus per-repo `repo_knowledge` files whose names resolve in that repo first, release-snapshot; `KnowledgeWriter` inserts a fact/note as text so comments survive; `KnowledgeReview` compares names with the last build via `codegraph-out/knowledge-state.json` for the report's "Knowledge to review"),
   `Output/Views.cs` (rollups for output), `Output/Obsidian.cs` (vault; manifest-based sync, only rewrites changed
   notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path/search/source; names resolve
   exactly - id, name, qual or path, any case - or as a `*` pattern, never by partial match: `GraphQuery.Resolve`).

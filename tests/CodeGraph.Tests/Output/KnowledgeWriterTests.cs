@@ -40,7 +40,8 @@ public sealed class KnowledgeWriterTests : IDisposable
 
         var warnings = new List<string>();
         KnowledgeLoader.ApplyKnowledge(g, [central], warnings);
-        Assert.Empty(warnings);
+        // the sample procedure already writes the table, so that fact is only flagged as possibly redundant
+        Assert.All(warnings, w => Assert.Contains("may be redundant", w));
         Assert.NotNull(g.GetEdge("db:usp_Save", "db:Orders", "is_slow_on"));
         Assert.Equal("Status 1 = placed\n\nNever delete rows", (string)g.GetNode("db:Orders")!["knowledge_notes"]![0]!);
     }

@@ -35,6 +35,9 @@ numbers to check. The agent then reads only the few files that matter.
    that repo's `.codegraph/knowledge.json`, committed with its code, so the next session and everyone else who
    graphs that repo know it too. Only checked facts belong there; a link that is missing again and again points
    to a parser gap instead.
+6. **Keep the knowledge current.** The report's *Knowledge to review* section lists entries that lost their node
+   (renamed or removed) or that the graph now links by itself. Now and then, re-check the entries against the code
+   (oldest first; `remember` dates each one) and propose fixes or removals to the user.
 
 ## MCP server: the graph as tools
 
@@ -110,7 +113,7 @@ Two shapes recur everywhere:
 | `report` | `{ section?, text, sections: [heading] }` |
 | `db_usage` | `{ target, depth, possible_checked, counts, users: [user], entry_points: [entry], truncated }` (see below) |
 | `text_search` | `{ query, total, files_searched, files_with_hits, truncated, hits: [{ repo, file, file_id, line, column, text, confidence: "text", node?, linked? }] }` |
-| `status` | `{ version, graph: { path, generated, modified_utc, nodes, edges }, report, cache, repos: [{ name, path, exists, branch, commit, current_branch, current_commit, changed }] }` |
+| `status` | `{ version, graph: { path, generated, modified_utc, nodes, edges }, report, cache, repos: [{ name, path, exists, branch, commit, current_branch, current_commit, changed }] }` |
 | `remember` | `{ recorded, message }` |
 
 A failed call (`isError: true`) returns `{ error, candidates? }`, with the matching or closest nodes when a name

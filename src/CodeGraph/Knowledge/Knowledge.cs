@@ -80,6 +80,41 @@ public sealed class NameIndex
     public List<string> FindAll(string name) => Hits(name).Select(h => h.Id).ToList();
 }
 
+/// <summary>
+/// Knowledge entries to look at again. Names are compared with what they matched at the last build (kept in
+/// <see cref="FileName"/> next to graph.json), so a renamed or removed project, table or file is noticed even when
+/// its old name now quietly becomes a concept.
+/// </summary>
+public sealed class KnowledgeReview
+{
+    public const string FileName = "knowledge-state.json";
+
+    /// <summary>"repo|name" (repo empty for central files) -> node id, from the last build.</summary>
+    public Dictionary<string, string> Previous { get; } = new(StringComparer.Ordinal);
+    public Dictionary<string, string> Current { get; } = new(StringComparer.Ordinal);
+    public List<string> Items { get; } = [];
+
+    public static KnowledgeReview Load(string path)
+    {
+        var r = new KnowledgeReview();
+        try
+        {
+            if (File.Exists(path) && JsonNode.Parse(File.ReadAllText(path)) is JsonObject o && o["names"] is JsonObject names)
+                foreach (var kv in names)
+                    if (kv.Value is JsonValue v && v.TryGetValue(out string? id)) r.Previous[kv.Key] = id;
+        }
+        catch (JsonException) { } // a damaged state file only costs one build's comparison
+        return r;
+    }
+
+    public void Save(string path)
+    {
+        var names = new JsonObject();
+        foreach (var kv in Current.OrderBy(kv => kv.Key, StringComparer.Ordinal)) names[kv.Key] = kv.Value;
+        File.WriteAllText(path, new JsonObject { ["names"] = names }.ToJsonString());
+    }
+}
+
 /// <summary>Extra knowledge layered on top of the code graph: releases and free-form facts/notes.</summary>
 public static class KnowledgeLoader
 {
@@ -218,23 +253,46 @@ public static class KnowledgeLoader
 
     /// <summary>
     /// Apply knowledge files. Names in a repo's own file prefer that repo's nodes. A name with a path separator that
-    /// is not in the graph (a typo, or a repo this graph does not scan) is skipped with a warning instead of
-    /// becoming a concept.
+    /// is not in the graph (a typo, or a repo this graph does not scan) is skipped instead of becoming a concept.
+    /// Entries worth a second look go to <paramref name="review"/> (or to the warnings without one): such paths,
+    /// names that matched a node at the last build and match nothing now, and facts the graph now links by itself.
     /// </summary>
-    public static void ApplyKnowledge(Graph g, List<(string Path, string? Repo)> files, List<string> warnings)
+    public static void ApplyKnowledge(Graph g, List<(string Path, string? Repo)> files, List<string> warnings,
+        KnowledgeReview? review = null)
     {
         if (files.Count == 0) return;
         var names = new NameIndex(g);
         string fname = "", repo = "";
+        var items = review?.Items ?? warnings;
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        void Item(string text) { if (seen.Add(text)) items.Add(text); }
+        // links the builder made (before any fact is added), either direction
+        var linked = new Dictionary<(string, string), string>();
+        foreach (var e in g.Edges)
+            if (e.Source != e.Target && !(e.Data["custom"] is JsonValue cv && cv.TryGetValue(out bool c) && c))
+                linked.TryAdd((e.Source, e.Target), e.Relation);
 
         string? Resolve(string name, bool create = true)
         {
+            string key = $"{repo}|{Slug(name).ToLowerInvariant()}";
             var nid = names.Find(name, repo.Length > 0 ? repo : null);
+            if (nid is not null && g.GetNode(nid)!.Kind != "concept")
+            {
+                if (review is not null) review.Current[key] = nid;
+                return nid;
+            }
+            string? before = review?.Previous.GetValueOrDefault(key);
+            if (before is not null)
+            {
+                review!.Current[key] = before; // keep asking until the entry is fixed or removed
+                Item($"{fname}: '{name}' matched {{{before}}} at the last build and matches nothing now (renamed or removed?)");
+            }
             if (nid is not null) return nid;
             if (!create) return null;
             if (name.IndexOfAny(['/', '\\']) >= 0)
             {
-                warnings.Add($"{fname}: '{name}' is not in the graph (a typo, or a repo this graph does not scan) - skipped");
+                if (before is null)
+                    Item($"{fname}: '{name}' is not in the graph (a typo, or a repo this graph does not scan) - skipped");
                 return null;
             }
             string cid = $"concept:{Slug(name).ToLowerInvariant()}";
@@ -288,6 +346,8 @@ public static class KnowledgeLoader
                     string? t = objS.Length > 0 ? Resolve(objS) : null;
                     if (t is not null)
                     {
+                        if (linked.TryGetValue((s, t), out var known) || linked.TryGetValue((t, s), out known))
+                            Item($"{fname}: fact '{subjS} {relS} {objS}' - the graph links these itself now ({known}); the fact may be redundant");
                         var e = g.AddEdge(s, t, rel, attrs: [("custom", JsonValue.Create(true)), ("label", relS), ("note", note?.DeepClone())]);
                         if (e is null && s == t)
                             warnings.Add($"{fname}: fact '{subjS} {relS} {objS}' links a node to itself");

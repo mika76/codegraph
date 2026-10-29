@@ -39,10 +39,16 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   file, anything else to the first `knowledge` file. The entry is inserted as text with its source and date as a
   comment, so everything already in the file stays as it was; duplicates are not added, and a second note on a node
   extends the first. The server instructions and the `/graph-ask` skill now tell agents to offer this.
+- 🧹 **Knowledge to review**: a new report section lists facts and notes whose name matched a node at the last build
+  and matches nothing now (renamed or removed - kept in `codegraph-out/knowledge-state.json`, and listed until the
+  entry is fixed), paths that are not in the graph, and facts the graph now links by itself. The build prints how
+  many there are, and `/graph-build` mentions them.
+- 🔍 **`/graph-review-knowledge` skill**: re-checks every fact and note against the code, oldest first, and proposes
+  keep / fix / remove for the user to approve before editing the files.
 
 ### 🔄 Changed
-- ⚠️ A fact or note naming a path that is not in the graph is skipped with a warning instead of becoming a concept
-  note.
+- ⚠️ A fact or note naming a path that is not in the graph is skipped and listed under *Knowledge to review*
+  instead of becoming a concept note.
 
 ## [0.3.0] - 2026-10-25
 
