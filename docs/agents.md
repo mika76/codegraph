@@ -47,6 +47,7 @@ files that the `source` tool shows.
 | `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
 | `db_usage` | `name`, `depth?`, `possible?` | who uses a table, view, procedure or column: direct users with read / write / exec and file:line (linked), possible users (strings and SQL naming it that were not linked), and the forms, components, views, routes and API endpoints above them |
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
+| `status` | - | when the graph was built, its size, and each repository's branch and commit then and now (`changed`: rebuild to catch up) |
 
 `search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
 `{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:order*`,
@@ -100,6 +101,7 @@ Two shapes recur everywhere:
 | `source` | `{ node, full_path, start_line, end_line, lines: [text], more_lines }` or `{ node, problem }` |
 | `report` | `{ section?, text, sections: [heading] }` |
 | `db_usage` | `{ target, depth, possible_checked, counts, users: [user], entry_points: [entry], truncated }` (see below) |
+| `status` | `{ version, graph: { path, generated, modified_utc, nodes, edges }, report, cache, repos: [{ name, path, exists, branch, commit, current_branch, current_commit, changed }] }` |
 
 A failed call (`isError: true`) returns `{ error, candidates? }`, with the matching or closest nodes when a name
 did not pick exactly one. A capped argument adds `notes`.

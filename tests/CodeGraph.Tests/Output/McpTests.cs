@@ -78,7 +78,7 @@ public sealed class McpTests : IDisposable
     public void Lists_read_only_tools_with_schemas()
     {
         var tools = Request(Server(), "tools/list")["result"]!["tools"]!.AsArray();
-        Assert.Equal(["search", "show", "impact", "path", "source", "db_usage", "report"], tools.Select(t => (string)t!["name"]!));
+        Assert.Equal(["search", "show", "impact", "path", "source", "db_usage", "report", "status"], tools.Select(t => (string)t!["name"]!));
         foreach (var t in tools)
         {
             Assert.Equal("object", (string)t!["inputSchema"]!["type"]!);
@@ -395,6 +395,45 @@ public sealed class McpTests : IDisposable
         var (text, err) = Call(s, "db_usage", new JsonObject { ["name"] = "frmMain.Save" });
         Assert.True(err);
         Assert.Contains("is not a database object or column", text);
+    }
+
+    [Fact]
+    public void Git_commit_is_read_from_refs_packed_refs_or_a_detached_head()
+    {
+        string repo = Path.Combine(_dir, "Shop"), git = Path.Combine(repo, ".git");
+        Directory.CreateDirectory(Path.Combine(git, "refs", "heads"));
+        string a = new('a', 40), b = new('b', 40), c = new('c', 40);
+        File.WriteAllText(Path.Combine(git, "HEAD"), "ref: refs/heads/main\n");
+        File.WriteAllText(Path.Combine(git, "refs", "heads", "main"), a + "\n");
+        Assert.Equal(a, CodeGraph.Knowledge.KnowledgeLoader.GitCommit(repo));
+        File.Delete(Path.Combine(git, "refs", "heads", "main"));
+        File.WriteAllText(Path.Combine(git, "packed-refs"), $"# pack-refs\n{b} refs/heads/main\n");
+        Assert.Equal(b, CodeGraph.Knowledge.KnowledgeLoader.GitCommit(repo));
+        File.WriteAllText(Path.Combine(git, "HEAD"), c + "\n");
+        Assert.Equal(c, CodeGraph.Knowledge.KnowledgeLoader.GitCommit(repo));
+        Assert.Null(CodeGraph.Knowledge.KnowledgeLoader.GitCommit(_dir));
+    }
+
+    [Fact]
+    public void Status_says_when_and_from_which_commits_the_graph_was_built()
+    {
+        string repo = Path.Combine(_dir, "Shop"), git = Path.Combine(repo, ".git");
+        Directory.CreateDirectory(Path.Combine(git, "refs", "heads"));
+        File.WriteAllText(Path.Combine(git, "HEAD"), "ref: refs/heads/R2.4.0\n");
+        File.WriteAllText(Path.Combine(git, "refs", "heads", "R2.4.0"), new string('a', 40));
+        var g = SampleGraph.Create();
+        g.Node("repo:Shop", ("path", repo), ("commit", new string('a', 40)));
+        g.Meta["generated"] = "2026-01-02 03:04";
+        g.Save(GraphPath);
+        var s = Server();
+        var d = Data(s, "status");
+        Assert.Equal("2026-01-02 03:04", (string)d["graph"]!["generated"]!);
+        Assert.Equal(g.Nodes.Count, (int)d["graph"]!["nodes"]!);
+        var r = d["repos"]![0]!;
+        Assert.Equal(("Shop", "R2.4.0", false), ((string)r["name"]!, (string)r["current_branch"]!, (bool)r["changed"]!));
+        File.WriteAllText(Path.Combine(git, "refs", "heads", "R2.4.0"), new string('b', 40));
+        Assert.True((bool)Data(s, "status")["repos"]![0]!["changed"]!);
+        Assert.Contains("Shop: R2.4.0 aaaaaaaaaaaa  - now R2.4.0 bbbbbbbbbbbb: rebuild to catch up", Call(s, "status").Text);
     }
 
     [Fact]

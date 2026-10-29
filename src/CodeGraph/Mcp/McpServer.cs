@@ -225,6 +225,10 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             {
                 ["section"] = Str("Section to return: any part of its heading, e.g. \"orphan\" or \"not found\"."),
             }),
+        Tool("status",
+            "When the graph was built, its size, and the branch and commit of each repository then and now (changed " +
+            "= the graph may be out of date; run codegraph build).",
+            new JsonObject()),
     ]);
 
     private static JsonObject Tool(string name, string description, JsonObject props, params string[] required) => new()
@@ -317,6 +321,23 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                 ["lines"] = ArrOf(T("string")), ["more_lines"] = T("integer"), ["problem"] = T("string"),
             },
             "db_usage" => DbUsageSchema(),
+            "status" => new JsonObject
+            {
+                ["version"] = T("string"),
+                ["graph"] = Obj(new JsonObject
+                {
+                    ["path"] = T("string"), ["generated"] = Str("Local build time, yyyy-MM-dd HH:mm."),
+                    ["modified_utc"] = T("string"), ["nodes"] = T("integer"), ["edges"] = T("integer"),
+                }),
+                ["report"] = T("boolean"), ["cache"] = T("boolean"),
+                ["repos"] = ArrOf(Obj(new JsonObject
+                {
+                    ["name"] = T("string"), ["path"] = T("string"), ["exists"] = T("boolean"),
+                    ["branch"] = Str("Branch at build time."), ["commit"] = Str("Commit id at build time."),
+                    ["current_branch"] = T("string"), ["current_commit"] = T("string"),
+                    ["changed"] = new JsonObject { ["type"] = "boolean", ["description"] = "The branch or commit has moved since the build." },
+                }, "name", "path", "changed")),
+            },
             "report" => new JsonObject
             {
                 ["section"] = T("string"), ["text"] = T("string"), ["sections"] = ArrOf(T("string")),
@@ -394,6 +415,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "source" => SourceTool,
             "db_usage" => DbUsageTool,
             "report" => Report,
+            "status" => Status,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
         string text;
@@ -495,6 +517,51 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         bool possible = a["possible"] is not JsonValue pv || !pv.TryGetValue(out bool b) || b;
         var res = DbUsage.Find(g, id, depth, possible ? Refs(g) : null);
         return (Query(w => DbUsage.Write(g, res, w, ids: true)), DbUsage.ToJson(g, res));
+    }
+
+    /// <summary>When the graph was built, from which branch and commit of each repo, and whether those have moved since.</summary>
+    private (string, JsonObject) Status(JsonObject a)
+    {
+        var g = Current();
+        var w = new StringWriter { NewLine = "\n" };
+        string modified = File.GetLastWriteTimeUtc(graphPath).ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture);
+        string cache = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(graphPath))!,
+            CodeGraph.Scan.Scanner.CacheFileName);
+        w.WriteLine($"codegraph {Cli.Version}; graph built {g.Meta["generated"]} ({modified}): " +
+                    $"{g.Nodes.Count:N0} nodes, {g.Edges.Count:N0} edges\n  {graphPath}");
+        var repos = new JsonArray();
+        foreach (var r in g.Nodes.Where(n => n.Kind == "repo"))
+        {
+            string path = r.Str("path") ?? "";
+            string? branch = r.Str("branch"), commit = r.Str("commit");
+            string? nowBranch = Knowledge.KnowledgeLoader.GitBranch(path), nowCommit = Knowledge.KnowledgeLoader.GitCommit(path);
+            bool changed = branch != nowBranch || (commit is not null && commit != nowCommit);
+            var o = new JsonObject { ["name"] = r.Name, ["path"] = path, ["exists"] = Directory.Exists(path) };
+            if (branch is not null) o["branch"] = branch;
+            if (commit is not null) o["commit"] = commit;
+            if (nowBranch is not null) o["current_branch"] = nowBranch;
+            if (nowCommit is not null) o["current_commit"] = nowCommit;
+            o["changed"] = changed;
+            repos.Add((JsonNode?)o);
+            string Short(string? c) => c is null ? "?" : c[..Math.Min(12, c.Length)];
+            w.WriteLine($"  {r.Name}: {(branch ?? "(no git)")} {(commit is null ? "" : Short(commit))}" +
+                        (changed ? $"  - now {nowBranch ?? "(no git)"} {Short(nowCommit)}: rebuild to catch up" : ""));
+        }
+        return (w.ToString(), new JsonObject
+        {
+            ["version"] = Cli.Version,
+            ["graph"] = new JsonObject
+            {
+                ["path"] = System.IO.Path.GetFullPath(graphPath),
+                ["generated"] = g.Meta["generated"]?.DeepClone(),
+                ["modified_utc"] = modified,
+                ["nodes"] = g.Nodes.Count,
+                ["edges"] = g.Edges.Count,
+            },
+            ["report"] = File.Exists(reportPath),
+            ["cache"] = File.Exists(cache),
+            ["repos"] = repos,
+        });
     }
 
     private RefIndex? _refs;

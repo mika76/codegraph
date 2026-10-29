@@ -227,7 +227,7 @@ public sealed partial class Builder
     {
         foreach (var repo in _cfg.Repos)
             _g.Node($"repo:{repo.Name}", ("kind", "repo"), ("name", repo.Name), ("path", repo.Path),
-                ("branch", GitBranch(repo.Path)));
+                ("branch", GitBranch(repo.Path)), ("commit", Knowledge.KnowledgeLoader.GitCommit(repo.Path)));
         foreach (var r in _records)
         {
             var f = r.Facts;

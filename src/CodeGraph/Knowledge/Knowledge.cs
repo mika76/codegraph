@@ -345,17 +345,54 @@ public static class KnowledgeLoader
     {
         try
         {
-            string gitDir = Path.Combine(repoPath, ".git");
-            if (File.Exists(gitDir))
-            {
-                string link = File.ReadAllText(gitDir, Encoding.UTF8).Trim();
-                if (!link.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase)) return null;
-                gitDir = Path.GetFullPath(Path.Combine(repoPath, link["gitdir:".Length..].Trim()));
-            }
+            if (GitDir(repoPath) is not { } gitDir) return null;
             string head = File.ReadAllText(Path.Combine(gitDir, "HEAD"), Encoding.UTF8).Trim();
             const string marker = "refs/heads/";
             int i = head.IndexOf(marker, StringComparison.Ordinal);
             return i >= 0 ? head[(i + marker.Length)..] : head[..Math.Min(12, head.Length)];
+        }
+        catch (IOException) { return null; }
+        catch (UnauthorizedAccessException) { return null; }
+    }
+
+    /// <summary>The repo's git folder: .git, or where a .git file (worktree, submodule) points; null when none.</summary>
+    private static string? GitDir(string repoPath)
+    {
+        string gitDir = Path.Combine(repoPath, ".git");
+        if (File.Exists(gitDir))
+        {
+            string link = File.ReadAllText(gitDir, Encoding.UTF8).Trim();
+            if (!link.StartsWith("gitdir:", StringComparison.OrdinalIgnoreCase)) return null;
+            return Path.GetFullPath(Path.Combine(repoPath, link["gitdir:".Length..].Trim()));
+        }
+        return Directory.Exists(gitDir) ? gitDir : null;
+    }
+
+    /// <summary>
+    /// The commit id checked out in a repo, read from .git (HEAD, the branch's ref file or packed-refs; a worktree's
+    /// refs are in its common folder); null when it can't be read.
+    /// </summary>
+    public static string? GitCommit(string repoPath)
+    {
+        try
+        {
+            if (GitDir(repoPath) is not { } gitDir) return null;
+            string head = File.ReadAllText(Path.Combine(gitDir, "HEAD"), Encoding.UTF8).Trim();
+            if (!head.StartsWith("ref:", StringComparison.Ordinal)) return head.Length >= 40 ? head : null;
+            string refName = head[4..].Trim();
+            string common = File.Exists(Path.Combine(gitDir, "commondir"))
+                ? Path.GetFullPath(Path.Combine(gitDir, File.ReadAllText(Path.Combine(gitDir, "commondir"), Encoding.UTF8).Trim()))
+                : gitDir;
+            foreach (var dir in new[] { gitDir, common })
+            {
+                string file = Path.Combine(dir, refName.Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(file)) return File.ReadAllText(file, Encoding.UTF8).Trim();
+            }
+            string packed = Path.Combine(common, "packed-refs");
+            if (File.Exists(packed))
+                foreach (var line in File.ReadLines(packed))
+                    if (line.EndsWith(" " + refName, StringComparison.Ordinal)) return line.Split(' ')[0];
+            return null;
         }
         catch (IOException) { return null; }
         catch (UnauthorizedAccessException) { return null; }
