@@ -328,7 +328,8 @@ public static class GraphQuery
         var inn = new Dictionary<string, List<string>>();
         foreach (var e in g.Edges)
         {
-            if (DepRels.Contains(e.Relation))
+            // a knowledge fact "A <relation> B" is recorded because A depends on B where the code does not show it
+            if (DepRels.Contains(e.Relation) || e.Data["custom"] is JsonValue cv && cv.TryGetValue(out bool custom) && custom)
                 GetOrAdd(inn, e.Target).Add(e.Source);
             // a form / class runs its init members when opened or created: they affect it, and so who opens it
             if (e.Relation == "contains" && g.GetNode(e.Target) is { } m && IsInit(m))

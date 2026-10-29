@@ -9,6 +9,14 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### 🔄 Changed
+- 🧠 `impact` (and the entry points of `db_usage`) follow knowledge facts: the subject of a fact depends on its
+  object, so a link recorded to fill a gap in the code (a call made at runtime) now counts.
+
+### 🐛 Fixed
+- 🧠 `remember` writes a routine as `Type.Member` (or its node id when that is not unique), not as its bare name, which
+  breaks once another routine gets the same name; knowledge files can name routines that way.
+
 ## [0.4.0] - 2026-10-29
 
 🧩 MCP for programs and for learning: structured results, database usage with entry points, text search, status,

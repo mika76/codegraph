@@ -191,6 +191,20 @@ public class QueryTests
     }
 
     [Fact]
+    public void Impact_follows_knowledge_facts_but_not_other_unknown_relations()
+    {
+        var g = SampleGraph.Create();
+        g.Node("db:Audit", ("kind", "db_proc"), ("name", "Audit"));
+        g.AddEdge(SampleGraph.Save, "db:Audit", "mentions_in_docs");
+        Assert.Contains("0 things", Run(w => GraphQuery.Impact(g, "Audit", w)));
+        // a fact fills a gap the code does not show: the subject depends on the object
+        g.AddEdge(SampleGraph.Load, "db:Audit", "executes_at_runtime", attrs: [("custom", JsonValue.Create(true))]);
+        var text = Run(w => GraphQuery.Impact(g, "Audit", w));
+        Assert.Contains("Sales/modDb.bas: Load", text);
+        Assert.Contains("Sales/frmMain.frm: Save", text);
+    }
+
+    [Fact]
     public void Path_prints_the_shortest_chain()
     {
         var text = Run(w => GraphQuery.Path(SampleGraph.Create(), "frmMain.Save", "usp_Save", w));

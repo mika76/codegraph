@@ -208,6 +208,9 @@ modules that didn't ship. (It rewrites the file, so comments in it are lost.)
 }
 ```
 
+A fact links its subject to its object, and `impact` follows it like a link from the code: record
+`["Monthly Close", "executes at runtime", "usp_Close"]` and the impact of `usp_Close` includes Monthly Close.
+
 **Keep knowledge with the code.** Besides the files listed in `knowledge`, each repo may have its own knowledge file
 (default `.codegraph/knowledge.json`, set with `repo_knowledge`). Commit it with the repo: everyone who graphs that
 repo gets its facts, and they follow its branches. Names in it mean that repo's files and projects first; a path that
