@@ -34,6 +34,9 @@ public sealed class NameIndex
             }
             else if (n.Kind == "file")
                 keys.Add(n.Str("path"));
+            // a routine as Type.Member: unique where the bare name is not
+            else if (n.Id.StartsWith("sym:", StringComparison.Ordinal) && n.Str("qual") is { } qual && qual != n.Str("name"))
+                keys.Add(qual);
             foreach (var k in keys)
                 if (!string.IsNullOrEmpty(k))
                     Add(k, n.Id, n.Kind, n.Str("repo"));

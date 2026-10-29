@@ -56,7 +56,7 @@ public sealed class KnowledgeWriterTests : IDisposable
         Assert.False(File.Exists(central));
         string text = File.ReadAllText(repo);
         Assert.StartsWith("// Facts and notes for codegraph", text);
-        Assert.Contains("    [\"Load\", \"calls at runtime\", \"Sales/frmMain.frm\", \"via CallByName\"],\n", text);
+        Assert.Contains("    [\"modDb.Load\", \"calls at runtime\", \"Sales/frmMain.frm\", \"via CallByName\"],\n", text);
         var warnings = new List<string>();
         KnowledgeLoader.ApplyKnowledge(g, [(repo, (string?)"Shop")], warnings);
         Assert.Empty(warnings);

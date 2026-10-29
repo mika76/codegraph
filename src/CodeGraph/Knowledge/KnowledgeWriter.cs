@@ -119,11 +119,14 @@ public static class KnowledgeWriter
         return n.Str("file") is { Length: > 0 } f && g.GetNode(f) is { } fn ? fn.Str("repo") : null;
     }
 
-    /// <summary>A readable name that the loader resolves back to the same node, else the node id.</summary>
+    /// <summary>
+    /// A readable name that the loader resolves back to the same node, else the node id. Symbols are written as
+    /// Type.Member: a bare routine name that is unique today becomes ambiguous when another routine gets it.
+    /// </summary>
     private static string NameFor(Graph g, NameIndex names, string id, string? repo)
     {
         var n = g.GetNode(id)!;
-        string? name = n.Kind == "file" ? n.Str("path") : n.Str("name");
+        string? name = n.Kind == "file" ? n.Str("path") : id.StartsWith("sym:", StringComparison.Ordinal) ? n.Str("qual") ?? n.Str("name") : n.Str("name");
         return !string.IsNullOrEmpty(name) && names.Find(name, repo) == id ? name : id;
     }
 
