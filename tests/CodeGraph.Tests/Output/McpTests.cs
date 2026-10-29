@@ -75,16 +75,38 @@ public sealed class McpTests : IDisposable
     }
 
     [Fact]
-    public void Lists_read_only_tools_with_schemas()
+    public void Lists_tools_with_schemas_only_remember_writes()
     {
         var tools = Request(Server(), "tools/list")["result"]!["tools"]!.AsArray();
-        Assert.Equal(["search", "show", "impact", "path", "source", "report"], tools.Select(t => (string)t!["name"]!));
+        Assert.Equal(["search", "show", "impact", "path", "source", "report", "remember"], tools.Select(t => (string)t!["name"]!));
         foreach (var t in tools)
         {
             Assert.Equal("object", (string)t!["inputSchema"]!["type"]!);
-            Assert.True((bool)t["annotations"]!["readOnlyHint"]!);
+            Assert.Equal((string)t["name"]! != "remember", (bool)t["annotations"]!["readOnlyHint"]!);
         }
         Assert.Equal(["from", "to"], tools[3]!["inputSchema"]!["required"]!.AsArray().Select(x => (string)x!));
+    }
+
+    [Fact]
+    public void Remember_writes_to_the_repo_file_of_the_subject()
+    {
+        string repoFile = Path.Combine(_dir, "Shop", ".codegraph", "knowledge.json");
+        string central = Path.Combine(_dir, "knowledge.json");
+        var s = new McpServer(GraphPath, ReportPath, knowledge: new(central, new Dictionary<string, string> { ["Shop"] = repoFile }));
+        var (text, err) = Call(s, "remember", new JsonObject
+        {
+            ["subject"] = "Sales/modDb.bas", ["relation"] = "reads settings from", ["object"] = "https://wiki.example.com/settings",
+            ["source"] = "told by the user",
+        });
+        Assert.False(err, text);
+        Assert.Contains("[\"Sales/modDb.bas\", \"reads settings from\", \"https://wiki.example.com/settings\"]", File.ReadAllText(repoFile));
+        // a concept goes to the central file
+        Assert.False(Call(s, "remember", new JsonObject { ["subject"] = "Team Sales", ["note"] = "Owns order entry.", ["source"] = "told" }).IsError);
+        Assert.Contains("\"Team Sales\": \"Owns order entry.\"", File.ReadAllText(central));
+        // mistakes come back as tool errors
+        Assert.True(Call(s, "remember", new JsonObject { ["subject"] = "Orders", ["source"] = "x" }).IsError);
+        Assert.True(Call(s, "remember", new JsonObject { ["subject"] = "Sales/Nope.bas", ["note"] = "n", ["source"] = "x" }).IsError);
+        Assert.True(Call(Server(), "remember", new JsonObject { ["subject"] = "Orders", ["note"] = "n", ["source"] = "x" }).IsError);
     }
 
     [Fact]

@@ -87,7 +87,7 @@ public static class Commands
         // stdout carries only protocol messages; anything else written to Console.Out goes to stderr
         Console.SetOut(Console.Error);
         Console.Error.WriteLine($"codegraph mcp {Cli.Version}: serving {GraphPath(cfg)}");
-        new Mcp.McpServer(GraphPath(cfg), System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md"))
+        new Mcp.McpServer(GraphPath(cfg), System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md"), knowledge: KnowledgeTargets.From(cfg))
             .Run(input, output, Console.Error);
         return 0;
     }

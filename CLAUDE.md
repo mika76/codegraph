@@ -69,13 +69,13 @@ Config: `codegraph.json` (JSON with comments: repos, ignores, vault, `releases.j
   `Url.Action` endpoints (`X["conventional"]`) resolve to `<Ctrl>Controller.<Action>` in the same repo first.
   C# interface calls also link to implementations.
 - `Model/Graph.cs` - nodes/edges whose attributes are `JsonObject`s (written as-is to graph.json).
-- `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes, release-snapshot),
+- `Knowledge/` (releases.json, releases from git branch names, knowledge.json facts/notes plus per-repo `repo_knowledge` files whose names resolve in that repo first, release-snapshot; `KnowledgeWriter` inserts a fact/note as text so comments survive),
   `Output/Views.cs` (rollups for output), `Output/Obsidian.cs` (vault; manifest-based sync, only rewrites changed
   notes, never touches user notes), `Output/Report.cs`, `Query/` (show/impact/path/search/source; names resolve
   exactly - id, name, qual or path, any case - or as a `*` pattern, never by partial match: `GraphQuery.Resolve`).
   `graph.json` is written to a temp file and swapped in (readers like the MCP server never see a partial file).
 - `Mcp/McpServer.cs` - `codegraph mcp`: MCP over stdio (JSON-RPC 2.0, one message per line, hand-written, no SDK);
-  tools search/show/impact/path/source/report wrap `GraphQuery`; reloads graph.json when its mtime changes.
+  tools search/show/impact/path/source/report wrap `GraphQuery`, `remember` writes via `KnowledgeWriter`; reloads graph.json when its mtime changes.
   stdout is protocol only - log to stderr.
 
 Node ids: `repo:`, `area:Repo:TopFolder`, `proj:Repo:relpath`, `sln:`, `file:Repo:rel`, `sym:Repo:rel#Type.Member`,

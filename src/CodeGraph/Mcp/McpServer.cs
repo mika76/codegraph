@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CodeGraph.Knowledge;
 using CodeGraph.Model;
 using CodeGraph.Query;
 
@@ -7,9 +8,10 @@ namespace CodeGraph.Mcp;
 
 /// <summary>
 /// A Model Context Protocol server over stdio: JSON-RPC 2.0, one message per line. It exposes the graph queries as
-/// read-only tools. graph.json is loaded on first use and loaded again when a build has rewritten it.
+/// read-only tools, plus <c>remember</c>, which adds a fact or note to a knowledge file. graph.json is loaded on
+/// first use and loaded again when a build has rewritten it.
 /// </summary>
-public sealed class McpServer(string graphPath, string reportPath, string? exePath = null)
+public sealed class McpServer(string graphPath, string reportPath, string? exePath = null, KnowledgeTargets? knowledge = null)
 {
     // the executable this server runs from and its time stamp at start, to notice a newer build on disk
     private readonly string? _exe = exePath ?? Environment.ProcessPath;
@@ -33,7 +35,11 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         "`path` (how two things are connected) and `source` (read the code). Those tools need an exact node id, name " +
         "or path (ids are printed in {braces}), or a pattern with * as wildcard; they never guess. Links are " +
         "deterministic but not complete (e.g. URLs built at runtime " +
-        "and late binding are not followed), so check important answers against the source.";
+        "and late binding are not followed), so check important answers against the source. When you establish " +
+        "something the graph does not show - a link it misses, what a table, setting or screen is for, a rule the " +
+        "user tells you - offer to record it with `remember`, so later sessions know it too. Record only what you " +
+        "checked in the source or were told, never links the graph already has; if the same kind of link is missing " +
+        "again and again, say so (a parser gap) instead of recording each one.";
 
     private Graph? _graph;
     private DateTime _stamp;
@@ -205,7 +211,27 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             {
                 ["section"] = Str("Section to return: any part of its heading, e.g. \"orphan\" or \"not found\"."),
             }),
+        WriteTool(Tool("remember",
+            "Record a fact (subject, relation, object) or a note about a node in the knowledge files, which every " +
+            "build adds to the graph and its notes. A node of a repository goes to that repository's own knowledge " +
+            "file (committed with its code), anything else to the central one. Existing comments and entries are " +
+            "kept. Ask the user before recording; it shows up after the next `codegraph build`.",
+            new JsonObject
+            {
+                ["subject"] = Str("What the fact or note is about: node id (from search, shown in {braces}), exact name, " +
+                                  "qualified name or path. A name that matches nothing becomes a concept (e.g. a team or business process)."),
+                ["relation"] = Str("For a fact: how the subject relates to the object, in a few words, e.g. \"calls at runtime\", \"is filled by\", \"owned by\"."),
+                ["object"] = Str("For a fact: the other node (same rules as subject), a concept, or a URL."),
+                ["note"] = Str("Text for the subject's note; with a relation, a remark on the fact."),
+                ["source"] = Str("How you know, e.g. \"verified in Orders/Save.cs:120\" or \"told by the user\". Written as a comment."),
+            }, "subject", "source")),
     ]);
+
+    private static JsonObject WriteTool(JsonObject tool)
+    {
+        tool["annotations"] = new JsonObject { ["readOnlyHint"] = false, ["destructiveHint"] = false, ["idempotentHint"] = true, ["openWorldHint"] = false };
+        return tool;
+    }
 
     private static JsonObject Tool(string name, string description, JsonObject props, params string[] required) => new()
     {
@@ -242,6 +268,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "source" => a => Query(w => GraphQuery.Source(Current(), Pick(a, "name"), w, Num(a, "context", 0, 0, 200),
                 Num(a, "max_lines", 200, 1, 2000))),
             "report" => Report,
+            "remember" => Remember,
             _ => throw new RpcException(-32602, $"Unknown tool: {name}"),
         };
         string text;
@@ -371,6 +398,20 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         }
         int found = heads.FindIndex(h => lines[h].Contains(want, StringComparison.OrdinalIgnoreCase));
         return found >= 0 ? Section(found) : throw new ToolException($"No section matches '{want}'. Sections:\n{Titles()}");
+    }
+
+    private string Remember(JsonObject a)
+    {
+        if (knowledge is null) throw new ToolException("remember is not available: this server was started without a config.");
+        try
+        {
+            return KnowledgeWriter.Remember(Current(), knowledge, Need(a, "subject"), Text(a, "relation"), Text(a, "object"),
+                Text(a, "note"), Need(a, "source"));
+        }
+        catch (CodeGraphException ex)
+        {
+            throw new ToolException(ex.Message);
+        }
     }
 
     private static string Direction(JsonObject a) => Text(a, "direction")?.ToLowerInvariant() switch

@@ -29,14 +29,20 @@ numbers to check. The agent then reads only the few files that matter.
 3. **Mention the blind spots** when they matter: calls through untyped variables (VB6 `Object`/`Variant`, late
    binding, reflection), SQL or URLs assembled at runtime, and anything ambiguous (skipped, never guessed).
 4. **Rebuild after changing code**: `codegraph build` takes a few seconds when little changed.
+5. **Record what the graph didn't know.** When the agent establishes something the graph can't show - a call made
+   through a URL built at runtime, what a table or setting is for, a rule the user explains - it offers to record it
+   as a fact or note with the `remember` tool (or by editing the knowledge file). Facts about a repo's nodes go to
+   that repo's `.codegraph/knowledge.json`, committed with its code, so the next session and everyone else who
+   graphs that repo know it too. Only checked facts belong there; a link that is missing again and again points
+   to a parser gap instead.
 
 ## MCP server: the graph as tools
 
 `codegraph mcp` is a [Model Context Protocol](https://modelcontextprotocol.io) server. Any MCP client (Claude
 Code, Claude Desktop, Cursor, VS Code / Copilot, Codex, Gemini CLI, ...) can then query the graph through tools
 instead of running the executable and reading its output. The client starts the server and talks to it over
-stdin/stdout. Nothing listens on the network, and the server only reads: the graph, the report, and the source
-files that the `source` tool shows.
+stdin/stdout. Nothing listens on the network. The server reads the graph, the report, and the source files that
+the `source` tool shows; the only thing it writes is a fact or note added with `remember`, to a knowledge file.
 
 | Tool | Arguments | Returns |
 |---|---|---|
@@ -46,6 +52,7 @@ files that the `source` tool shows.
 | `path` | `from`, `to`, `max_len?` | the shortest chain connecting two nodes; one-way chains first, a chain that changes direction only as a marked fallback |
 | `source` | `name`, `context?`, `max_lines?` | the definition's source lines with line numbers, read from the repository |
 | `report` | `section?` | the summary of `GRAPH_REPORT.md` and its list of sections, or one section (e.g. `orphan`, `not found`) |
+| `remember` | `subject`, `relation?` + `object?` or `note?`, `source` | adds a fact or note to the subject's repo knowledge file (`repo_knowledge`), or to the first `knowledge` file for anything else; comments and entries already there are kept, `source` is written as a comment, and it shows up after the next build |
 
 `search` is the fuzzy step; the other tools act on one node and never guess. Their `name` is a node id (printed in
 `{braces}`), an exact name, qualified name or path (any case), or a pattern with `*` as wildcard (`db:order*`,

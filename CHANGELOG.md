@@ -15,6 +15,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   that repo. Names in it resolve to that repo's nodes first. `repo_knowledge` in `codegraph.json` sets the file
   names (several allowed, `*` in the file name; `[]` turns it off), so separate graphs can keep separate knowledge.
 - 🆔 Facts and notes may name a node by its id (e.g. `db:orders`).
+- 🧠 **MCP `remember` tool**: an agent records what it learned and checked - a link the graph misses, what a table
+  or setting is for, a rule the user explained - as a fact or note. A node of a repo goes to that repo's knowledge
+  file, anything else to the first `knowledge` file. The entry is inserted as text with its source and date as a
+  comment, so everything already in the file stays as it was; duplicates are not added, and a second note on a node
+  extends the first. The server instructions and the `/graph-ask` skill now tell agents to offer this.
 
 ### 🔄 Changed
 - ⚠️ A fact or note naming a path that is not in the graph is skipped with a warning instead of becoming a concept
