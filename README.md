@@ -205,6 +205,14 @@ modules that didn't ship. (It rewrites the file, so comments in it are lost.)
 }
 ```
 
+**Keep knowledge with the code.** Besides the files listed in `knowledge`, each repo may have its own knowledge file
+(default `.codegraph/knowledge.json`, set with `repo_knowledge`). Commit it with the repo: everyone who graphs that
+repo gets its facts, and they follow its branches. Names in it mean that repo's files and projects first; a path that
+is not in the graph (a typo, or a repo this graph does not scan) is skipped with a warning. Several graphs can keep
+separate knowledge by naming their own files, e.g. `"repo_knowledge": [".codegraph/knowledge.json",
+".codegraph/billing-team.json"]`. Use the central `knowledge` files for things that belong to no single repo. Keep
+`codegraph.json` and those files in a repo of your own too - they hold your knowledge, not throwaway output.
+
 **Your own notes in the vault** - write them anywhere outside the generated folders (e.g. `Notes/`) and link with
 normal Obsidian links. The build never touches them.
 
@@ -269,7 +277,7 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 | `vault` | Obsidian vault folder (leave out to skip the vault) |
 | `output` | where `graph.json`, the report and the parse cache go (default `./codegraph-out`) |
 | `ignore` | extra ignore patterns for all repos |
-| `releases`, `releases_from_branches`, `knowledge` | your own knowledge files (see above) |
+| `releases`, `releases_from_branches`, `knowledge`, `repo_knowledge` | your own knowledge files (see above) |
 | `proc_prefixes` | optional stored procedure name prefixes, e.g. `["sp", "usp"]`: a string with one counts as a procedure name even away from database code (a module of constants), and is reported when no such procedure exists |
 | `extractors` | rules for your own XML/JSON formats (see [Your own file formats](#your-own-file-formats)) |
 | `external_ignore_extra` | library names not to show as external dependencies |

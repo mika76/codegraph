@@ -9,6 +9,17 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### ✨ Added
+- 📚 **Knowledge files inside each repo**: a repo's own `.codegraph/knowledge.json` (same format as `knowledge.json`)
+  is loaded when present, so facts and notes can be committed with the code and are shared by every graph that scans
+  that repo. Names in it resolve to that repo's nodes first. `repo_knowledge` in `codegraph.json` sets the file
+  names (several allowed, `*` in the file name; `[]` turns it off), so separate graphs can keep separate knowledge.
+- 🆔 Facts and notes may name a node by its id (e.g. `db:orders`).
+
+### 🔄 Changed
+- ⚠️ A fact or note naming a path that is not in the graph is skipped with a warning instead of becoming a concept
+  note.
+
 ## [0.3.0] - 2026-10-25
 
 🤖 MCP server, column-level impact and naming-independent linking.

@@ -87,6 +87,11 @@ public sealed class Config
     public string? Releases { get; set; }
     public bool ReleasesFromBranches { get; set; } = true;
     public List<string> Knowledge { get; set; } = [];
+    /// <summary>
+    /// Knowledge files inside each repo, relative to its root (* and ? allowed in the file name). Loaded when present;
+    /// facts there resolve names in that repo first. Several graphs can use their own file names; [] turns it off.
+    /// </summary>
+    public List<string> RepoKnowledge { get; set; } = [".codegraph/knowledge.json"];
     public int MaxFileKb { get; set; } = 4096;
     /// <summary>Parallel parse workers; 0 = one per CPU.</summary>
     public int Jobs { get; set; }

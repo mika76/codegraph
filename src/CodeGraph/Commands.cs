@@ -26,7 +26,7 @@ public static class Commands
         var warnings = new List<string>();
         if (cfg.ReleasesFromBranches) KnowledgeLoader.ApplyBranchReleases(g);
         KnowledgeLoader.ApplyReleases(g, cfg.Releases, warnings);
-        KnowledgeLoader.ApplyKnowledge(g, cfg.Knowledge, warnings);
+        KnowledgeLoader.ApplyKnowledge(g, KnowledgeLoader.KnowledgeFiles(cfg), warnings);
         g.Meta["generated"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         g.Meta["repos"] = new JsonArray(cfg.Repos
             .Select(r => (JsonNode?)new JsonObject { ["name"] = r.Name, ["path"] = r.Path }).ToArray());

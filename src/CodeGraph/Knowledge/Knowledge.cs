@@ -17,13 +17,13 @@ public sealed class NameIndex
         "library", "solution", "form", "class", "module", "usercontrol", "interface", "struct", "concept", "release",
     ];
 
-    private readonly Dictionary<string, List<(string Id, string Kind)>> _idx = [];
+    private readonly Dictionary<string, List<(string Id, string Kind, string? Repo)>> _idx = [];
 
     public NameIndex(Graph g)
     {
         foreach (var n in g.Nodes)
         {
-            var keys = new List<string?> { n.Str("name") };
+            var keys = new List<string?> { n.Id, n.Str("name") };
             if (n.Kind == "project")
             {
                 keys.Add(n.Str("internal_name"));
@@ -36,7 +36,7 @@ public sealed class NameIndex
                 keys.Add(n.Str("path"));
             foreach (var k in keys)
                 if (!string.IsNullOrEmpty(k))
-                    Add(k, n.Id, n.Kind);
+                    Add(k, n.Id, n.Kind, n.Str("repo"));
         }
     }
 
@@ -52,23 +52,28 @@ public sealed class NameIndex
         return i >= dot ? p : p[..dot];
     }
 
-    public void Add(string name, string id, string kind)
+    public void Add(string name, string id, string kind, string? repo = null)
     {
         var key = name.ToLowerInvariant();
         if (!_idx.TryGetValue(key, out var l)) _idx[key] = l = [];
-        l.Add((id, kind));
+        l.Add((id, kind, repo));
     }
 
-    private List<(string Id, string Kind)> Hits(string name) =>
+    private List<(string Id, string Kind, string? Repo)> Hits(string name) =>
         _idx.TryGetValue(name.Trim().ToLowerInvariant(), out var l) ? l : [];
 
-    public string? Find(string name)
+    /// <summary>
+    /// The node a name means: by kind priority, then (for a name written in a repo's own knowledge file) a node of
+    /// that repo before the same kind elsewhere.
+    /// </summary>
+    public string? Find(string name, string? repo = null)
     {
         var hits = Hits(name);
         if (hits.Count == 0) return null;
         // stable sort by kind priority
         return hits.Select((h, i) => (h, i))
             .OrderBy(x => { int p = Array.IndexOf(KindPriority, x.h.Kind); return p < 0 ? 99 : p; })
+            .ThenBy(x => repo is not null && string.Equals(x.h.Repo, repo, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
             .ThenBy(x => x.i).First().h.Id;
     }
 
@@ -184,29 +189,64 @@ public static class KnowledgeLoader
     }
 
     // ------------------------------------------------------------------ facts and notes
-    /// <summary>Apply knowledge files; patterns may contain * and ? in the file name part.</summary>
-    public static void ApplyKnowledge(Graph g, IEnumerable<string>? patterns, List<string> warnings)
+    /// <summary>
+    /// The knowledge files of a config: the central <c>knowledge</c> patterns, then each repo's
+    /// <c>repo_knowledge</c> files (with the repo they belong to). Patterns may contain * and ? in the file name part.
+    /// </summary>
+    public static List<(string Path, string? Repo)> KnowledgeFiles(Config cfg)
     {
-        var files = new List<string>();
-        foreach (var p in patterns ?? [])
-            files.AddRange(Glob(p));
+        var files = new List<(string, string?)>();
+        foreach (var p in cfg.Knowledge)
+            files.AddRange(Glob(p).Select(f => (f, (string?)null)));
+        foreach (var r in cfg.Repos)
+            foreach (var p in cfg.RepoKnowledge)
+                files.AddRange(Glob(Path.Combine(r.Path, p)).Select(f => (f, (string?)r.Name)));
+        return files;
+    }
+
+    /// <summary>The file <c>remember</c> writes facts about a repo's nodes to (the first repo_knowledge name without wildcards).</summary>
+    public static string? RepoKnowledgeFile(Config cfg, string repoPath) =>
+        cfg.RepoKnowledge.FirstOrDefault(p => p.IndexOfAny(['*', '?']) < 0) is { } p ? Path.Combine(repoPath, p) : null;
+
+    /// <summary>The file <c>remember</c> writes everything else to (the first knowledge entry without wildcards).</summary>
+    public static string? CentralKnowledgeFile(Config cfg) =>
+        cfg.Knowledge.FirstOrDefault(p => p.IndexOfAny(['*', '?']) < 0);
+
+    /// <summary>Apply knowledge files; patterns may contain * and ? in the file name part.</summary>
+    public static void ApplyKnowledge(Graph g, IEnumerable<string>? patterns, List<string> warnings) =>
+        ApplyKnowledge(g, (patterns ?? []).SelectMany(Glob).Select(f => (f, (string?)null)).ToList(), warnings);
+
+    /// <summary>
+    /// Apply knowledge files. Names in a repo's own file prefer that repo's nodes. A name with a path separator that
+    /// is not in the graph (a typo, or a repo this graph does not scan) is skipped with a warning instead of
+    /// becoming a concept.
+    /// </summary>
+    public static void ApplyKnowledge(Graph g, List<(string Path, string? Repo)> files, List<string> warnings)
+    {
         if (files.Count == 0) return;
         var names = new NameIndex(g);
+        string fname = "", repo = "";
 
         string? Resolve(string name, bool create = true)
         {
-            var nid = names.Find(name);
+            var nid = names.Find(name, repo.Length > 0 ? repo : null);
             if (nid is not null) return nid;
             if (!create) return null;
+            if (name.IndexOfAny(['/', '\\']) >= 0)
+            {
+                warnings.Add($"{fname}: '{name}' is not in the graph (a typo, or a repo this graph does not scan) - skipped");
+                return null;
+            }
             string cid = $"concept:{Slug(name).ToLowerInvariant()}";
             g.Node(cid, ("kind", "concept"), ("name", Slug(name)));
             names.Add(Slug(name), cid, "concept");
             return cid;
         }
 
-        foreach (var path in files)
+        foreach (var (path, fileRepo) in files)
         {
-            string fname = Path.GetFileName(path);
+            repo = fileRepo ?? "";
+            fname = fileRepo is null ? Path.GetFileName(path) : $"{fileRepo}: {Path.GetFileName(path)}";
             if (LoadFile(path) is not JsonObject data) continue;
             if (data["facts"] is JsonArray facts)
             {
@@ -229,7 +269,7 @@ public static class KnowledgeLoader
                     }
                     if (!Truthy(subj) || !Truthy(relation)) continue;
                     string subjS = AsString(subj), relS = AsString(relation);
-                    string s = Resolve(subjS)!;
+                    if (Resolve(subjS) is not { } s) continue;
                     string rel = Regex.Replace(relS, @"[^\w ]+", "").Trim().ToLowerInvariant().Replace(' ', '_');
                     if (rel.Length == 0) rel = "related_to";
                     string objS = Truthy(obj) ? AsString(obj) : "";
@@ -258,7 +298,7 @@ public static class KnowledgeLoader
             {
                 foreach (var kv in notes)
                 {
-                    string nid = Resolve(kv.Key)!;
+                    if (Resolve(kv.Key) is not { } nid) continue;
                     var n = g.GetNode(nid)!;
                     if (n["knowledge_notes"] is not JsonArray kn) n["knowledge_notes"] = kn = [];
                     kn.Add((JsonNode)JsonValue.Create(AsString(kv.Value).Trim())!);
