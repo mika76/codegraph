@@ -205,6 +205,31 @@ public class QueryTests
     }
 
     [Fact]
+    public void Db_usage_folds_many_entry_points_per_project()
+    {
+        var g = SampleGraph.Create();
+        g.Node("proj:Shop:Till/Till.vbp", ("kind", "project"), ("name", "Till"), ("repo", "Shop"));
+        for (int i = 0; i < 25; i++)
+        {
+            string proj = i < 15 ? SampleGraph.Proj : "proj:Shop:Till/Till.vbp";
+            string file = $"file:Shop:F/frm{i}.frm", form = $"sym:Shop:F/frm{i}.frm#frm{i}";
+            g.Node(file, ("kind", "file"), ("name", $"frm{i}.frm"), ("path", $"F/frm{i}.frm"), ("repo", "Shop"), ("projects", new JsonArray(proj)));
+            g.Node(form, ("kind", "form"), ("name", $"frm{i}"), ("file", file), ("line", 1));
+            g.AddEdge(form, "db:Orders", "reads");
+        }
+        var res = CodeGraph.Query.DbUsage.Find(g, "db:Orders", 3, null);
+        Assert.True(res.Entries.Count > CodeGraph.Query.DbUsage.FoldEntries);
+        var text = Run(w => CodeGraph.Query.DbUsage.Write(g, res, w));
+        Assert.Contains("in 2 projects (folded; the JSON result lists each)", text);
+        Assert.Contains("\n    Order Entry (16): ", text);  // 15 forms and frmMain, which writes it
+        Assert.Contains("\n    Till (10): frm15 (form), frm16 (form), frm17 (form), frm18 (form) (+6)\n", text);
+        var json = CodeGraph.Query.DbUsage.ToJson(g, res);
+        Assert.Equal("Order Entry", (string)json["entry_points_by_project"]![0]!["project"]!);
+        Assert.Equal(10, (int)json["entry_points_by_project"]![1]!["count"]!);
+        Assert.Equal(res.Entries.Count, json["entry_points"]!.AsArray().Count);  // the JSON keeps each one
+    }
+
+    [Fact]
     public void Path_prints_the_shortest_chain()
     {
         var text = Run(w => GraphQuery.Path(SampleGraph.Create(), "frmMain.Save", "usp_Save", w));

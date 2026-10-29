@@ -27,10 +27,12 @@ public static class DbUsage
     public static Result Find(Graph g, string target, int depth, RefIndex? refs)
     {
         var users = new List<User>();
+        // files an extractor read items from (a list of patches): what they do to the database comes from their SQL
+        var itemFiles = g.Nodes.Where(n => n.Id.StartsWith("item:", StringComparison.Ordinal)).Select(n => n.Str("file")).OfType<string>().ToHashSet();
         foreach (var e in g.Edges)
             if (e.Target == target && e.Relation != "contains")
-                users.Add(new User(e.Source, e, null, "confirmed", Layer(g, e.Source), null));
-        if (refs is not null) users.AddRange(Possible(g, target, refs, users));
+                users.Add(new User(e.Source, e, null, "confirmed", Layer(g, e.Source, itemFiles), null));
+        if (refs is not null) users.AddRange(Possible(g, target, refs, users, itemFiles));
 
         var inn = GraphQuery.ReverseDeps(g);
         // a file's screen / page: the form, component or view it defines
@@ -82,13 +84,14 @@ public static class DbUsage
     }
 
     /// <summary>database (a DB object), script (a SQL file or an item with SQL) or app (any other code).</summary>
-    private static string Layer(Graph g, string id)
+    private static string Layer(Graph g, string id, HashSet<string> itemFiles)
     {
         var n = g.GetNode(id);
         if (n is null) return "app";
         if (n.Kind.StartsWith("db_", StringComparison.Ordinal) || n.Kind == "column") return "database";
         // an extractor item (a patch, a report definition) uses the database through the SQL it carries
         if (id.StartsWith("item:", StringComparison.Ordinal)) return "script";
+        if (n.Kind == "file" && itemFiles.Contains(id)) return "script";
         var fn = n.Kind == "file" ? n : g.GetNode(n.Str("file") ?? "");
         return fn?.Str("lang") == "sql" ? "script" : "app";
     }
@@ -98,7 +101,7 @@ public static class DbUsage
     /// link: a string with the object's name, SQL the builder could not pin to this object, a column of a statement
     /// whose tables are unknown or several of which have such a column, a column read by name from a row.
     /// </summary>
-    private static List<User> Possible(Graph g, string target, RefIndex refs, List<User> confirmed)
+    private static List<User> Possible(Graph g, string target, RefIndex refs, List<User> confirmed, HashSet<string> itemFiles)
     {
         var t = g.GetNode(target)!;
         bool isColumn = t.Kind == "column";
@@ -114,7 +117,7 @@ public static class DbUsage
             if (reason is null) continue;
             string caller = Caller(g, r);
             if (done.Contains(caller) || !seen.Add((r.FileId, r.Line, r.Name.ToLowerInvariant()))) continue;
-            found.Add(new User(caller, null, r, "possible", Layer(g, caller), reason));
+            found.Add(new User(caller, null, r, "possible", Layer(g, caller, itemFiles), reason));
         }
         return found.OrderBy(u => u.Ref!.FileId, StringComparer.Ordinal).ThenBy(u => u.Ref!.Line).ToList();
     }
@@ -215,6 +218,8 @@ public static class DbUsage
             },
             ["users"] = users,
             ["entry_points"] = entries,
+            ["entry_points_by_project"] = Structured.Arr(ByProject(g, res.Entries).Select(p =>
+                (JsonNode?)new JsonObject { ["project"] = p.Project, ["count"] = p.Entries.Count })),
             ["truncated"] = res.Users.Count > Structured.MaxItems || res.Entries.Count > Structured.MaxItems,
         };
     }
@@ -256,7 +261,20 @@ public static class DbUsage
             }
             if (poss.Count > 200) w.WriteLine($"    ... {poss.Count - 200} more");
         }
-        w.WriteLine($"\nEntry points (screens, routes and API endpoints within {res.Depth} step{(res.Depth == 1 ? "" : "s")}): {res.Entries.Count}");
+        w.Write($"\nEntry points (screens, routes and API endpoints within {res.Depth} step{(res.Depth == 1 ? "" : "s")}): {res.Entries.Count}");
+        if (res.Entries.Count > FoldEntries)
+        {
+            // a busy table is reached from screens of many apps: one line per project instead of one per screen
+            var byProject = ByProject(g, res.Entries);
+            w.WriteLine($" in {byProject.Count} project{(byProject.Count == 1 ? "" : "s")} (folded; the JSON result lists each)");
+            foreach (var (project, eps) in byProject)
+            {
+                var names = eps.Select(ep => GraphQuery.Label(g, ep.Id).Split("  [")[0] + (ep.Confidence == "possible" ? " [possible]" : "")).ToList();
+                w.WriteLine($"    {project} ({eps.Count}): {string.Join(", ", names.Take(4))}{(names.Count > 4 ? $" (+{names.Count - 4})" : "")}");
+            }
+            return;
+        }
+        w.WriteLine();
         foreach (var ep in res.Entries.Take(200))
         {
             string routes = g.GetNode(ep.Id)?.Data["routes"] is JsonArray rs ? "  " + string.Join(", ", rs.Select(x => x?.ToString())) : "";
@@ -265,5 +283,19 @@ public static class DbUsage
                         $"{(ep.Confidence == "possible" ? "  [possible]" : "")}{Id(ep.Id)}");
         }
         if (res.Entries.Count > 200) w.WriteLine($"    ... {res.Entries.Count - 200} more");
+    }
+
+    /// <summary>More entry points than this are folded per project in the text answer.</summary>
+    public const int FoldEntries = 20;
+
+    /// <summary>Entry points per project (most first; an entry in a file of several projects counts in each).</summary>
+    public static List<(string Project, List<EntryPoint> Entries)> ByProject(Graph g, IEnumerable<EntryPoint> entries)
+    {
+        var map = new Dictionary<string, List<EntryPoint>>();
+        foreach (var ep in entries)
+            foreach (var p in Structured.Projects(g, ep.Id) is { Count: > 0 } ps ? ps : ["(no project)"])
+                (map.TryGetValue(p, out var l) ? l : map[p] = []).Add(ep);
+        return map.OrderByDescending(kv => kv.Value.Count).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Select(kv => (kv.Key, kv.Value)).ToList();
     }
 }

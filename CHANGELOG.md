@@ -17,14 +17,17 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   callers were missing from `impact` and `db_usage`.
 
 ### 🔄 Changed
+- 🗂️ `db_usage` folds more than 20 entry points into one line per project (count and the first few names), so a
+  busy column no longer answers with a page of screens. The JSON result still lists each one and adds
+  `entry_points_by_project`.
 - 🧠 `impact` (and the entry points of `db_usage`) follow knowledge facts: the subject of a fact depends on its
   object, so a link recorded to fill a gap in the code (a call made at runtime) now counts.
 
 ### 🐛 Fixed
 - 🧠 `remember` writes a routine as `Type.Member` (or its node id when that is not unique), not as its bare name, which
   breaks once another routine gets the same name; knowledge files can name routines that way.
-- 🗃️ `db_usage` counts extractor items that carry SQL (a patch in a patch list, a report definition) with the SQL
-  scripts instead of application code.
+- 🗃️ `db_usage` counts extractor items that carry SQL (a patch in a patch list, a report definition) and the files
+  they come from with the SQL scripts instead of application code.
 - ✏️ A column assigned through an accessor (`rs.Fields("x").Value = 1`, `row["x"] = 1`) is a write: `db_usage`
   lists it as "column written by name" with mode `write`, not as a read. Comparisons (`If rs.Fields("x") = 1`) stay
   reads.

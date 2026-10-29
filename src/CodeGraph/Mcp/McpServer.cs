@@ -453,7 +453,9 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
                 ["confirmed"] = T("integer"), ["possible"] = T("integer"), ["confirmed_app"] = T("integer"),
                 ["confirmed_database"] = T("integer"), ["confirmed_script"] = T("integer"), ["entry_points"] = T("integer"),
             }),
-            ["users"] = ArrOf(user), ["entry_points"] = ArrOf(entry), ["truncated"] = T("boolean"),
+            ["users"] = ArrOf(user), ["entry_points"] = ArrOf(entry),
+            ["entry_points_by_project"] = ArrOf(Obj(new JsonObject { ["project"] = T("string"), ["count"] = T("integer") }, "project", "count")),
+            ["truncated"] = T("boolean"),
         };
     }
 

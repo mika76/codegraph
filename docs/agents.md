@@ -126,13 +126,15 @@ did not pick exactly one. A capped argument adds `notes`.
   or `possible` (a reference that names the target but was not linked: `file`, `line`, `text` as written, `reason`,
   e.g. "name in a string", "column in SQL with several tables", "column read by name", "column written by name"). Possible users come from the
   parse cache (`cache.json` next to `graph.json`); `possible_checked` is false without it. Routines that already
-  have a confirmed link are not repeated as possible. `layer` is `app` (application code), `script` (a SQL file, or an extractor item such as a patch that carries SQL) or
+  have a confirmed link are not repeated as possible. `layer` is `app` (application code), `script` (a SQL file, or an extractor item such as a patch that carries SQL, or the file it comes from) or
   `database` (a procedure, view, trigger or table).
 - **entry point**: `{ id, node, kind, distance, confidence, through, routes?, projects? }` - `kind` is `form`,
   `component`, `view`, `route` or `api` (a method with routes; `routes` like `GET /orders/{}`). It is found by
   walking up the callers of each user for up to `depth` steps (default 4); `distance` 0 means the user is in that
   form or is that endpoint. `through` lists the users it was reached from; it is `possible` when only possible
   users lead there.
+- **entry_points_by_project**: `[{ project, count }]`, most first (an entry in a file of several projects counts in
+  each). With more than 20 entry points the text answer shows only these lines, with the first few names.
 - **counts**: `{ confirmed, possible, confirmed_app, confirmed_script, confirmed_database, entry_points }`.
 
 A new `graph.json` is picked up automatically, but a new `codegraph.exe` is not: the running server keeps the code
