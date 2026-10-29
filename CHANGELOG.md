@@ -23,6 +23,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   reads, ignore rules respected), for what the graph cannot link - SQL built at runtime, names in config files.
   Each hit is marked as a text match, with the routine it is in and whether the graph already links that routine to
   something of that name.
+- 🏷️ **Database names**: `"database"` per repo and `"databases"` per folder in `codegraph.json` put the database a
+  script creates on its `db:` / `col:` nodes (`database`, also in `show` and structured results).
 - 🩺 **`status` MCP tool**: when the graph was built, its size, and each repository's branch and commit then and now
   (`changed` = rebuild to catch up). Repository nodes now record the `commit` they were built from.
 

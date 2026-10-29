@@ -534,7 +534,8 @@ public sealed partial class Builder
             var also = defs.Skip(1).Select(d => d.R.Id).Take(50).ToList();
             _g.Node(nid, ("kind", s.Kind), ("name", s.Name), ("file", r.Id), ("repo", r.Repo), ("line", s.Line),
                 ("lines", s.Lines == 0 ? null : s.Lines), ("columns", s.Extra?["columns"]),
-                ("also_defined_in", also.Count > 0 ? Arr(also) : null));
+                ("also_defined_in", also.Count > 0 ? Arr(also) : null),
+                ("database", _cfg.Repos.FirstOrDefault(x => x.Name == r.Repo)?.DatabaseOf(r.Rel)));
             _g.AddEdge(r.Id, nid, "defines");
             foreach (var d in defs.Skip(1)) _g.AddEdge(d.R.Id, nid, "alters");
             _db[key] = nid;
@@ -718,7 +719,8 @@ public sealed partial class Builder
                 if (col.Length == 0 || cols.ContainsKey(key)) continue;
                 string cid = $"col:{n.Id[3..]}.{key}";
                 _g.Node(cid, ("kind", "column"), ("name", $"{n.Name}.{col}"), ("table", n.Id), ("definition", def),
-                    ("repo", n.Str("repo")), ("file", n.Str("file")), ("line", n.Data["line"]?.DeepClone()));
+                    ("repo", n.Str("repo")), ("file", n.Str("file")), ("line", n.Data["line"]?.DeepClone()),
+                    ("database", n.Str("database")));
                 _g.AddEdge(n.Id, cid, "contains");
                 cols[key] = cid;
             }

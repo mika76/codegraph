@@ -179,7 +179,7 @@ public static class GraphQuery
         if (nid is null) return;
         var n = g.GetNode(nid)!;
         w.WriteLine(Label(g, nid) + (ids ? $"  {{{nid}}}" : ""));
-        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "definition", "columns", "projects", "route_name", "meta" })
+        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "definition", "columns", "projects", "route_name", "meta", "database" })
         {
             var val = n.Data[k];
             if (!CodeGraph.Knowledge.KnowledgeLoader.Truthy(val)) continue;

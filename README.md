@@ -266,7 +266,7 @@ components, Razor views (`.cshtml`), Rust, WiX installers (`.wixproj .wxs .wxi`)
 
 | Setting | Meaning |
 |---|---|
-| `repos` | `{ "name", "path", "ignore": [...] }` for each repository |
+| `repos` | `{ "name", "path", "ignore": [...], "database"?, "databases"? }` for each repository; `database` names the database its SQL scripts create, `databases` maps folders to databases (`{ "Billing/Db": "Billing" }`, the deepest folder wins). The name is shown on `db:` / `col:` nodes (`database`); objects with the same name in two databases are still one node |
 | `vault` | Obsidian vault folder (leave out to skip the vault) |
 | `output` | where `graph.json`, the report and the parse cache go (default `./codegraph-out`) |
 | `ignore` | extra ignore patterns for all repos |

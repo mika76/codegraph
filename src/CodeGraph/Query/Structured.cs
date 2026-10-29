@@ -33,6 +33,7 @@ public static class Structured
         else if (!string.IsNullOrEmpty(n.Str("path")) && n.Kind != "repo")
             o["path"] = n.Str("path");
         if (n.Int("line") is { } line && n.Kind != "file") o["line"] = line;
+        if (!string.IsNullOrEmpty(n.Str("database"))) o["database"] = n.Str("database");
         return o;
     }
 
@@ -87,7 +88,7 @@ public static class Structured
         var n = g.GetNode(nid)!;
         var node = NodeJson(g, nid);
         var attrs = new JsonObject();
-        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "definition", "columns", "projects", "route_name", "meta", "routes" })
+        foreach (var k in new[] { "version", "output", "ptype", "loc", "lines", "signature", "definition", "columns", "projects", "route_name", "meta", "routes", "database" })
             if (CodeGraph.Knowledge.KnowledgeLoader.Truthy(n.Data[k]))
                 attrs[k] = n.Data[k]!.DeepClone();
         bool wantOut = direction is "both" or "out", wantIn = direction is "both" or "in";

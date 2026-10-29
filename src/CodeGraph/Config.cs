@@ -8,6 +8,25 @@ public sealed class RepoConfig
     public string Name { get; set; } = "";
     public string Path { get; set; } = "";
     public List<string> Ignore { get; set; } = [];
+    /// <summary>The database the SQL scripts of this repo create (shown on its db: and col: nodes).</summary>
+    public string? Database { get; set; }
+    /// <summary>Folder (repo-relative) -> database, for repos with scripts of several databases; the deepest folder wins.</summary>
+    public Dictionary<string, string> Databases { get; set; } = [];
+
+    /// <summary>The database of a repo-relative file: its deepest folder in <see cref="Databases"/>, else <see cref="Database"/>.</summary>
+    public string? DatabaseOf(string rel)
+    {
+        string key = Build.Paths.Key(rel);
+        string? best = null;
+        int bestLen = -1;
+        foreach (var (folder, db) in Databases)
+        {
+            string fk = Build.Paths.Key(folder);
+            if (fk == "." || key.StartsWith(fk + "/", StringComparison.Ordinal))
+                if ((fk == "." ? 0 : fk.Length) > bestLen) (best, bestLen) = (db, fk == "." ? 0 : fk.Length);
+        }
+        return best ?? Database;
+    }
 }
 
 /// <summary>Rules that turn one of your own XML/JSON file formats into graph nodes and links (docs/design/extractors.md).</summary>

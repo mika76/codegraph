@@ -285,6 +285,7 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
         ["id"] = T("string"), ["kind"] = T("string"), ["name"] = T("string"), ["qual"] = T("string"),
         ["repo"] = T("string"), ["file"] = Str("Repository-relative path of the node's file."), ["file_id"] = T("string"),
         ["path"] = T("string"), ["line"] = T("integer"),
+        ["database"] = Str("The database a db: or col: node belongs to, when the config names one."),
     }, "id", "kind", "name");
 
     private static JsonObject Direction() => new() { ["type"] = "string", ["enum"] = new JsonArray("in", "out") };

@@ -544,6 +544,28 @@ public class BuilderTests
     }
 
     [Fact]
+    public void Db_objects_and_columns_carry_the_configured_database()
+    {
+        static FileFacts Sql(string rel, string text) => CodeGraph.Parsers.SqlParser.Parse(rel, text);
+        var cfg = Cfg("Shop");
+        cfg.Repos[0].Database = "Sales";
+        cfg.Repos[0].Databases = new() { ["Billing/Db"] = "Billing", ["Billing/Db/Archive"] = "BillingArchive" };
+        var g = Build(cfg,
+            Rec("Db/dbo.Orders.sql", Sql("Db/dbo.Orders.sql", "CREATE TABLE dbo.Orders (Id int, Total money)")),
+            Rec("Billing/Db/dbo.Invoices.sql", Sql("Billing/Db/dbo.Invoices.sql", "CREATE TABLE dbo.Invoices (Id int)")),
+            Rec("Billing/Db/Archive/dbo.Old.sql", Sql("Billing/Db/Archive/dbo.Old.sql", "CREATE TABLE dbo.Old (Id int)")),
+            Rec("Billing/DbTools/dbo.Tool.sql", Sql("Billing/DbTools/dbo.Tool.sql", "CREATE TABLE dbo.Tool (Id int)")));
+        Assert.Equal("Sales", g.GetNode("db:orders")!.Str("database"));
+        Assert.Equal("Sales", g.GetNode("col:orders.total")!.Str("database"));
+        Assert.Equal("Billing", g.GetNode("db:invoices")!.Str("database"));
+        Assert.Equal("BillingArchive", g.GetNode("db:old")!.Str("database"));
+        Assert.Equal("Sales", g.GetNode("db:tool")!.Str("database"));  // a folder name that only starts the same
+        Assert.Equal("Billing", CodeGraph.Query.Structured.NodeJson(g, "db:invoices")["database"]!.ToString());
+        Assert.Null(Build(Cfg("Shop"), Rec("Db/dbo.Orders.sql", Sql("Db/dbo.Orders.sql", "CREATE TABLE dbo.Orders (Id int)")))
+            .GetNode("db:orders")!.Str("database"));
+    }
+
+    [Fact]
     public void Columns_are_linked_to_the_procs_views_code_and_patches_that_use_them()
     {
         static FileFacts Sql(string rel, string text) => CodeGraph.Parsers.SqlParser.Parse(rel, text);

@@ -30,6 +30,7 @@
   "repos": [
     { "name": "MyApp", "path": "C:/src/MyApp" },
     // { "name": "MyApi", "path": "C:/src/MyApi", "ignore": ["Tests/Fixtures"] },
+    // { "name": "MyDb", "path": "C:/src/MyDb", "database": "Sales", "databases": { "Billing/Db": "Billing" } },
   ],
 
   "obsidian": {
