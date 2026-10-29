@@ -27,6 +27,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
   script creates on its `db:` / `col:` nodes (`database`, also in `show` and structured results).
 - 🩺 **`status` MCP tool**: when the graph was built, its size, and each repository's branch and commit then and now
   (`changed` = rebuild to catch up). Repository nodes now record the `commit` they were built from.
+- 📐 Design note for comparing a live database with the repository scripts (`docs/design/live-db-compare.md`):
+  the caller takes a catalog snapshot, codegraph compares it with the graph and never connects to a database.
 
 ## [0.3.0] - 2026-10-25
 

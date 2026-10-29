@@ -16,7 +16,8 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
 
 - [x] **MCP server over `graph.json`** (built, 0.3.0). `codegraph mcp` lets Claude, Cursor and other
   assistants query the graph directly (`search`, `show`, `impact`, `path`, `source`) instead of shelling out and
-  reading text. See the [agents guide](agents.md#mcp-server-the-graph-as-tools).
+  reading text, and returns structured results for programs, plus `db_usage`, `text_search` and `status`. See the
+  [agents guide](agents.md#mcp-server-the-graph-as-tools).
 - **Link more of what's there** (M-L). A typical first run resolves about 40% of all references. Targets:
   - URLs built at runtime: follow simple string concatenation and constants
     (`baseUrl + '/orders/' + id`, jsonp helpers), so more front-end calls reach their API action.
@@ -33,6 +34,9 @@ Where codegraph is heading, roughly in order. Each item says why it matters; siz
   C# `const`) as nodes with their values, linked from the code that uses them (`uses_value`) - including VB6's
   unqualified enum members - so "who uses `OrderStatus.Shipped`?" works, and SQL kept in a constant links its
   tables to the code that uses the constant.
+- **Live database vs scripts** (M). Compare a catalog snapshot that the caller takes (codegraph never connects to a
+  database) with the `db:` / `col:` nodes: objects and columns only in one of them, changed types and procedure
+  text, with the code that would break - see [live database compare](design/live-db-compare.md).
 - **Release diff** (M). `codegraph diff 2.3 2.4` (two releases, or two branches/graphs): modules, tables,
   procedures and API routes added, removed or changed. Builds on the release tracking that already exists.
 
