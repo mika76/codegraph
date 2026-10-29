@@ -160,6 +160,43 @@ public sealed class KnowledgeTests : IDisposable
     }
 
     [Fact]
+    public void Review_lists_lost_names_and_facts_the_graph_now_links()
+    {
+        string k = Write("knowledge.json", """
+            { "facts": [
+                ["Order Entry", "owned by", "Team Sales"],
+                ["Save", "stores orders in", "Orders"],
+              ],
+              "notes": { "Sales/modDb.bas": "talks to the database" } }
+            """);
+        string state = Path.Combine(_dir, KnowledgeReview.FileName);
+        // first build: everything matches; the second fact is a link the builder already made
+        var first = KnowledgeReview.Load(state);
+        KnowledgeLoader.ApplyKnowledge(SampleGraph.Create(), [(k, (string?)null)], [], first);
+        Assert.Equal(["knowledge.json: fact 'Save stores orders in Orders' - the graph links these itself now (writes); the fact may be redundant"],
+            first.Items);
+        first.Save(state);
+
+        // the project is renamed and the module removed
+        var g = SampleGraph.Create();
+        g.GetNode(SampleGraph.Proj)!["name"] = "Order Desk";
+        g.GetNode(SampleGraph.Proj)!["output"] = "OrderDesk.exe";
+        g.GetNode(SampleGraph.FDb)!["path"] = "Sales/modData.bas";
+        var second = KnowledgeReview.Load(state);
+        var warnings = new List<string>();
+        KnowledgeLoader.ApplyKnowledge(g, [(k, (string?)null)], warnings, second);
+        Assert.Empty(warnings);
+        Assert.Contains($"knowledge.json: 'Order Entry' matched {{{SampleGraph.Proj}}} at the last build and matches nothing now (renamed or removed?)", second.Items);
+        Assert.Contains(second.Items, i => i.StartsWith("knowledge.json: 'Sales/modDb.bas' matched {" + SampleGraph.FDb + "}"));
+        Assert.Equal(3, second.Items.Count);
+        // still reported on the next build, until the entry is fixed
+        second.Save(state);
+        var third = KnowledgeReview.Load(state);
+        KnowledgeLoader.ApplyKnowledge(g, [(k, (string?)null)], [], third);
+        Assert.Equal(second.Items, third.Items);
+    }
+
+    [Fact]
     public void Name_index_prefers_projects_and_matches_output_names()
     {
         var idx = new NameIndex(SampleGraph.Create());

@@ -26,15 +26,18 @@ public static class Commands
         var warnings = new List<string>();
         if (cfg.ReleasesFromBranches) KnowledgeLoader.ApplyBranchReleases(g);
         KnowledgeLoader.ApplyReleases(g, cfg.Releases, warnings);
-        KnowledgeLoader.ApplyKnowledge(g, KnowledgeLoader.KnowledgeFiles(cfg), warnings);
+        string statePath = System.IO.Path.Combine(cfg.Output, KnowledgeReview.FileName);
+        var review = KnowledgeReview.Load(statePath);
+        KnowledgeLoader.ApplyKnowledge(g, KnowledgeLoader.KnowledgeFiles(cfg), warnings, review);
         g.Meta["generated"] = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
         g.Meta["repos"] = new JsonArray(cfg.Repos
             .Select(r => (JsonNode?)new JsonObject { ["name"] = r.Name, ["path"] = r.Path }).ToArray());
         Directory.CreateDirectory(cfg.Output);
         g.Save(GraphPath(cfg));
+        review.Save(statePath);
 
         string reportPath = System.IO.Path.Combine(cfg.Output, "GRAPH_REPORT.md");
-        string md = Report.BuildReport(g, stats, unresolved, errors, warnings);
+        string md = Report.BuildReport(g, stats, unresolved, errors, warnings, review.Items);
         File.WriteAllText(reportPath, md);
         if (!string.IsNullOrEmpty(cfg.Vault) && !noVault)
         {
@@ -48,6 +51,8 @@ public static class Commands
                           $"{kinds.Where(k => k.Key.StartsWith("db_")).Sum(k => k.Value)} DB objects)");
         Console.WriteLine($"Graph: {GraphPath(cfg)}\nReport: {reportPath}");
         foreach (var w in warnings.Take(20)) Console.WriteLine($"  warning: {w}");
+        if (review.Items.Count > 0)
+            Console.WriteLine($"  {review.Items.Count} knowledge entr{(review.Items.Count == 1 ? "y" : "ies")} to review - see \"Knowledge to review\" in the report.");
         if (errors.Count > 0)
             Console.WriteLine($"  {errors.Count} file(s) could not be parsed - see the report.");
         return 0;

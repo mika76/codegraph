@@ -135,9 +135,10 @@ This is where codegraph shines: instead of grepping repo by repo, an agent (Clau
   `show`, `impact`, `path`, `source`, `report`, and `remember`, which records what an agent learns (a link the graph
   misses, what a table is for) as a fact or note in the knowledge files. Register it once, e.g.
   `claude mcp add codegraph --scope user -- C:\src\codegraph\publish\codegraph.exe mcp --config C:\src\codegraph\codegraph.json`.
-- **Claude Code:** `claude-setup\install.ps1` installs three skills: `/graph-ask` (answer "who uses / what breaks"
-  questions from the graph, then check the source), `/graph-build` (rebuild and review the report) and
-  `/graph-release` (record releases).
+- **Claude Code:** `claude-setup\install.ps1` installs four skills: `/graph-ask` (answer "who uses / what breaks"
+  questions from the graph, then check the source, and offer to record what it learned), `/graph-build` (rebuild
+  and review the report), `/graph-release` (record releases) and `/graph-review-knowledge` (re-check facts and
+  notes against the code and propose fixes or removals).
 - **Any agent:** add a few lines to your workspace's `CLAUDE.md` / `AGENTS.md` telling it to run `show`, `impact`
   and `path` and verify the results; agents can also read `graph.json` directly.
 
@@ -213,6 +214,13 @@ is not in the graph (a typo, or a repo this graph does not scan) is skipped with
 separate knowledge by naming their own files, e.g. `"repo_knowledge": [".codegraph/knowledge.json",
 ".codegraph/billing-team.json"]`. Use the central `knowledge` files for things that belong to no single repo. Keep
 `codegraph.json` and those files in a repo of your own too - they hold your knowledge, not throwaway output.
+
+**Keeping it current.** Every build lists, under *Knowledge to review* in the report, facts and notes whose name
+matched a node at the last build and matches nothing now (a renamed or removed project, table or file - noticed even
+though the old name would quietly become a concept), paths that are not in the graph, and facts the graph now links
+by itself (often after a parser improvement), which can usually go. Checking whether a fact is still *true* needs a
+reader: the Claude Code skill `/graph-review-knowledge` re-checks each entry against the source, oldest first, and
+proposes keep / fix / remove for you to approve. Run it after big refactors or every month or so.
 
 **Your own notes in the vault** - write them anywhere outside the generated folders (e.g. `Notes/`) and link with
 normal Obsidian links. The build never touches them.
