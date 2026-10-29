@@ -400,6 +400,7 @@ public sealed class McpTests : IDisposable
             ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "column", Name = "Status", Line = 3, Extra = new JsonObject { ["tables"] = new JsonArray("customers") } }),
             ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Status", Line = 5, Extra = new JsonObject { ["column"] = true } }),
             ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Status", Line = 6 }),
+            ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "literal", Name = "Status", Line = 7, Mode = "write", Extra = new JsonObject { ["column"] = true } }),
             ("Sales/Old.bas", new CodeGraph.Model.Ref { Kind = "column", Name = "Status", Line = 9, Extra = new JsonObject { ["tables"] = two.DeepClone(), ["item"] = "item:patch:7" } }));
         var s = Server();
         var d = Data(s, "db_usage", new JsonObject { ["name"] = "Orders.Status" });
@@ -407,8 +408,11 @@ public sealed class McpTests : IDisposable
         Assert.Equal("write", (string)users[0]!["mode"]!);
         Assert.Equal(11, (int)users[0]!["line"]!);
         Assert.Equal("read", (string)users[1]!["mode"]!);  // the patch
+        // an extractor item carries SQL: it is counted with the SQL scripts, not as application code
+        Assert.Equal("script", (string)users[1]!["layer"]!);
+        Assert.Equal(1, (int)d["counts"]!["confirmed_script"]!);
         // the column of another table, the plain string and the patch's own statement are not possible users
-        Assert.Equal(["column in SQL with several tables", "column read by name"],
+        Assert.Equal(["column in SQL with several tables", "column read by name", "column written by name"],
             users.Skip(2).Select(u => (string)u!["reason"]!));
         // without the cache: no possible users, and it says so
         var noPossible = Data(s, "db_usage", new JsonObject { ["name"] = "Orders.Status", ["possible"] = false });

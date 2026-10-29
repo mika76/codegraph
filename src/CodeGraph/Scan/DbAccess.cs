@@ -46,6 +46,14 @@ public static partial class DbAccess
     [GeneratedRegex("""\(\s*([A-Za-z_]\w*)\s*,\s*["']([^"'\r\n]+)["']\s*[,)]""")]
     private static partial Regex VariableThenString();
 
+    /// <summary>After a column accessor: it is assigned (rs.Fields("x").Value = 1, row["x"] = 1), not compared.</summary>
+    [GeneratedRegex(@"\G(?:\s*\.\s*Value\b)?\s*=(?![=>])", RegexOptions.IgnoreCase)]
+    private static partial Regex AssignedAfter();
+
+    /// <summary>Before a column accessor, from the start of its line: only the object it belongs to (a statement, not an If).</summary>
+    [GeneratedRegex(@"^\s*(?:(?:Let|Set)\s+)?[\w.!\[\]()]*$", RegexOptions.IgnoreCase)]
+    private static partial Regex StatementStart();
+
     public static void Mark(string fileName, string text, FileFacts facts)
     {
         var literals = facts.Refs.Where(r => r.Kind == "literal").ToList();
@@ -55,12 +63,22 @@ public static partial class DbAccess
         var textLines = new LineIndex(text);
         var rows = RowVariable().Matches(text)
             .Select(m => m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // a column assigned at the start of a statement is written: data.Fields("x").Value = 1
+        var written = ColumnAccess().Matches(text)
+            .Where(m => AssignedAfter().IsMatch(text, m.Index + m.Length) &&
+                        StatementStart().IsMatch(text[(text.LastIndexOf('\n', Math.Max(0, m.Index - 1)) + 1)..m.Index]))
+            .Select(m => (Line: textLines.Line(m.Index), Key: SqlText.LiteralIdentifier(m.Groups[1].Value)))
+            .Where(c => c.Key is not null).ToHashSet();
         var columns = ColumnAccess().Matches(text).Select(m => (m.Index, Value: m.Groups[1].Value))
             .Concat(VariableThenString().Matches(text).Where(m => rows.Contains(m.Groups[1].Value)).Select(m => (m.Index, Value: m.Groups[2].Value)))
             .Select(c => (Line: textLines.Line(c.Index), Key: SqlText.LiteralIdentifier(c.Value)))
             .Where(c => c.Key is not null).ToHashSet();
         foreach (var r in literals)
-            if (columns.Contains((r.Line, r.Name))) r.X["column"] = true;
+            if (columns.Contains((r.Line, r.Name)))
+            {
+                r.X["column"] = true;
+                if (written.Contains((r.Line, r.Name))) r.Mode = "write";
+            }
         (string code, bool execute) = Path.GetExtension(fileName).ToLowerInvariant() switch
         {
             ".frm" or ".bas" or ".cls" or ".ctl" or ".dsr" or ".pag" or ".dob" => (Scrub.Vb(text).Code, true),

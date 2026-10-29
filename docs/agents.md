@@ -124,9 +124,9 @@ did not pick exactly one. A capped argument adds `notes`.
 - **user**: `{ id, node, confidence, layer, relation?, mode?, line?, via?, dynamic?, count?, file?, file_id?, text?,
   reason?, projects? }`. `confidence` is `confirmed` (a resolved link in the graph: `relation`, `mode`, first `line`)
   or `possible` (a reference that names the target but was not linked: `file`, `line`, `text` as written, `reason`,
-  e.g. "name in a string", "column in SQL with several tables", "column read by name"). Possible users come from the
+  e.g. "name in a string", "column in SQL with several tables", "column read by name", "column written by name"). Possible users come from the
   parse cache (`cache.json` next to `graph.json`); `possible_checked` is false without it. Routines that already
-  have a confirmed link are not repeated as possible. `layer` is `app` (application code), `script` (a SQL file) or
+  have a confirmed link are not repeated as possible. `layer` is `app` (application code), `script` (a SQL file, or an extractor item such as a patch that carries SQL) or
   `database` (a procedure, view, trigger or table).
 - **entry point**: `{ id, node, kind, distance, confidence, through, routes?, projects? }` - `kind` is `form`,
   `component`, `view`, `route` or `api` (a method with routes; `routes` like `GET /orders/{}`). It is found by

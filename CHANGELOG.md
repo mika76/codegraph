@@ -16,6 +16,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 ### 🐛 Fixed
 - 🧠 `remember` writes a routine as `Type.Member` (or its node id when that is not unique), not as its bare name, which
   breaks once another routine gets the same name; knowledge files can name routines that way.
+- 🗃️ `db_usage` counts extractor items that carry SQL (a patch in a patch list, a report definition) with the SQL
+  scripts instead of application code.
+- ✏️ A column assigned through an accessor (`rs.Fields("x").Value = 1`, `row["x"] = 1`) is a write: `db_usage`
+  lists it as "column written by name" with mode `write`, not as a read. Comparisons (`If rs.Fields("x") = 1`) stay
+  reads.
 
 ## [0.4.0] - 2026-10-29
 

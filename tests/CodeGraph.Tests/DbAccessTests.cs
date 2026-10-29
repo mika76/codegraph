@@ -145,6 +145,42 @@ public class DbAccessTests
     }
 
     [Fact]
+    public void A_column_assigned_through_an_accessor_is_written()
+    {
+        var vb = Parse("frmEdit.frm", """
+            Attribute VB_Name = "frmEdit"
+            Private Sub Save(data As ADODB.Recordset)
+                data.Fields("bill_value").value = CCur(txtValue)
+                If data.Fields("bill_count").value = 1 Then x = data.Fields("bill_qty")
+                With data
+                    .Fields("bill_note") = txtNote
+                End With
+                data.Update
+            End Sub
+            """);
+        string? Mode(FileFacts f, string name) => f.Refs.Single(r => r.Name == name && r.Kind == "literal").Mode;
+        Assert.Equal("write", Mode(vb, "bill_value"));
+        Assert.Equal("write", Mode(vb, "bill_note"));
+        Assert.Null(Mode(vb, "bill_count"));  // compared in an If
+        Assert.Null(Mode(vb, "bill_qty"));    // read into x
+        var cs = Parse("Repo.cs", """
+            class Repo
+            {
+                void Fill(DataRow row)
+                {
+                    row["bill_total"] = 5;
+                    if (row["bill_points"] == null) return;
+                    var q = row["bill_qty"];
+                }
+            }
+            """);
+        Assert.Equal("write", Mode(cs, "bill_total"));
+        Assert.Null(Mode(cs, "bill_points"));
+        Assert.Null(Mode(cs, "bill_qty"));
+        Assert.True(cs.Refs.Single(r => r.Name == "bill_total").X.ContainsKey("column"));
+    }
+
+    [Fact]
     public void A_string_passed_with_a_row_to_your_own_helper_is_a_column()
     {
         var cs = Parse("Item.cs", """

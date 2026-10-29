@@ -81,12 +81,14 @@ public static class DbUsage
             yield return (screen, g.GetNode(screen)!.Kind);
     }
 
-    /// <summary>database (a DB object), script (a SQL file) or app (any other code).</summary>
+    /// <summary>database (a DB object), script (a SQL file or an item with SQL) or app (any other code).</summary>
     private static string Layer(Graph g, string id)
     {
         var n = g.GetNode(id);
         if (n is null) return "app";
         if (n.Kind.StartsWith("db_", StringComparison.Ordinal) || n.Kind == "column") return "database";
+        // an extractor item (a patch, a report definition) uses the database through the SQL it carries
+        if (id.StartsWith("item:", StringComparison.Ordinal)) return "script";
         var fn = n.Kind == "file" ? n : g.GetNode(n.Str("file") ?? "");
         return fn?.Str("lang") == "sql" ? "script" : "app";
     }
@@ -128,7 +130,7 @@ public static class DbUsage
 
     private static string? ColumnReason(RefIndex.Entry r, string tableKey)
     {
-        if (r.Kind == "literal") return r.ColumnRead ? "column read by name" : null;
+        if (r.Kind == "literal") return !r.ColumnRead ? null : r.Mode == "write" ? "column written by name" : "column read by name";
         if (r.Kind != "column") return null;
         // qualified with this table: the builder links those; with another table: not this column
         if (r.Table is not null) return null;
