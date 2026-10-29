@@ -127,6 +127,11 @@ For "who uses / what breaks / how is X connected" questions, run from `C:\src\co
 `.\publish\codegraph.exe path "<a>" "<b>"` - then verify the important results in the source before answering.
 After code changes, rebuild with `.\publish\codegraph.exe build`.
 Blind spots: late binding / untyped variables, SQL and URLs built at runtime.
+When you establish something the graph doesn't show (a link it misses, what a table or setting is for, a rule the
+user explains), offer to record it: the `remember` MCP tool, or by hand in that repo's `.codegraph/knowledge.json`
+(facts `[subject, relation, object]`, notes `"name": "text"`; keep the comments, add `// source (date)` above the
+entry). Only record what you checked or were told. If the build report lists "Knowledge to review", fix or remove
+those entries with the user's approval.
 ```
 
 Give the agent permission to run the executable without asking (in Claude Code, an `allow` rule such as
