@@ -11,12 +11,15 @@ Work from the codegraph folder (where `codegraph.json` is):
    client route, installer).
 2. Use the graph first. If the `codegraph` MCP tools are available, use them:
    `search` (find the node and its id), `show` (connections; `relation` + `direction` to filter, e.g. who writes
-   a table), `impact` (what depends on it), `path` (how two things connect), `source` (read the code). When a
-   name matches several things or nothing they return the candidate ids - call again with the right id (names are
-   exact; use * as a wildcard). Otherwise use the executable:
+   a table), `impact` (what depends on it), `path` (how two things connect), `source` (read the code),
+   `db_usage` (who reads / writes a table, column or proc, its possible unlinked uses, and the screens and API
+   endpoints above them), `text_search` (plain text matches, for SQL built at runtime; unlinked hits are what the
+   graph missed). When a name matches several things or nothing they return the candidate ids - call again with
+   the right id (names are exact; use * as a wildcard). Otherwise use the executable:
    - `./publish/codegraph.exe show "<name>"` - definition, version, all incoming/outgoing links.
    - `./publish/codegraph.exe impact "<name>" --depth 3` - everything that depends on it, grouped by app.
    - `./publish/codegraph.exe path "<a>" "<b>"` - how two things connect.
+   - `./publish/codegraph.exe db-usage "<table, column or proc>"` - its users, possible users and entry points.
    Names are exact (use * as a wildcard); for several matches or none the tool lists candidates - re-run with the
    path or node id.
    For bigger questions, load `codegraph-out/graph.json` with a short PowerShell script (`ConvertFrom-Json`; nodes/edges, see CLAUDE.md) - Python is not installed.

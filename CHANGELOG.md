@@ -9,6 +9,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-29
+
+🧩 MCP for programs and for learning: structured results, database usage with entry points, text search, status,
+and knowledge that agents record and review.
+
 ### ✨ Added
 - 🧩 **Structured MCP results**: every MCP tool also returns its answer as JSON in `structuredContent`, with an
   `outputSchema` per tool in `tools/list`, so a program can use the server without parsing text. Nodes and
@@ -250,7 +255,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 📦 **Native executables** for Windows, Linux and macOS (x64 and ARM64) on every release; CI runs the tests on all
   three systems.
 
-[Unreleased]: https://github.com/mika76/codegraph/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mika76/codegraph/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mika76/codegraph/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mika76/codegraph/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mika76/codegraph/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/mika76/codegraph/releases/tag/v0.1.0
