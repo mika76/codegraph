@@ -117,26 +117,6 @@ public class QueryTests
     }
 
     [Fact]
-    public void Search_matches_typed_words_whatever_separates_them_in_names()
-    {
-        var g = SampleGraph.Create();
-        g.Node("db:Order_Line", ("kind", "db_table"), ("name", "Order_Line"));
-        g.Node("sym:Shop:web/orderLineService.ts#orderLineService", ("kind", "module"), ("name", "orderLineService"));
-        g.Node("file:Shop:web/order-lines.vue", ("kind", "file"), ("name", "order-lines.vue"), ("path", "web/order-lines.vue"), ("repo", "Shop"));
-        g.Node("db:LineOrder", ("kind", "db_table"), ("name", "LineOrder"));
-        // the whole run of words first (exactly, then inside a name), then every word anywhere in the name
-        var hits = GraphQuery.Search(g, "order line");
-        Assert.Equal("db:Order_Line", hits[0]);
-        Assert.Equal(["file:Shop:web/order-lines.vue", "sym:Shop:web/orderLineService.ts#orderLineService"], hits[1..3]);
-        Assert.Equal("db:LineOrder", hits[^1]);
-        // a plural word finds the singular; one word without separators finds the underscored name
-        Assert.Contains("db:Order_Line", GraphQuery.Search(g, "order lines"));
-        Assert.Equal("db:Order_Line", GraphQuery.Search(g, "orderline")[0]);
-        // the text as typed still wins: no word matching when it already matches
-        Assert.Equal(["db:Orders"], GraphQuery.Search(g, "orders", kind: "db_table"));
-    }
-
-    [Fact]
     public void Routes_show_name_and_meta_and_are_found_by_them()
     {
         var g = SampleGraph.Create();

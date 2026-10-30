@@ -139,14 +139,11 @@ public static class GraphQuery
     /// <summary>
     /// Nodes whose name/qual/path/id contains the text (case-insensitive), optionally of one kind and repo. Exact
     /// matches come first, then names starting with the text, names containing it, paths/ids containing it; within
-    /// each by kind rank and id length. When the text as typed matches nothing, its words are matched with case and
-    /// separators ignored ("order line" finds OrderLine, order_line and order-lines.vue).
+    /// each by kind rank and id length.
     /// </summary>
     public static List<string> Search(Graph g, string text, string? kind = null, string? repo = null)
     {
         string low = text.Trim().ToLowerInvariant();
-        string[] words = low.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Select(Fold).Where(x => x.Length > 0).ToArray();
-        string folded = string.Concat(words);
         var hits = new List<(string Id, int Tier, int Rank)>();
         foreach (var n in g.Nodes)
         {
@@ -164,39 +161,11 @@ public static class GraphQuery
                 : path.Contains(low, StringComparison.Ordinal) || id.Contains(low, StringComparison.Ordinal)
                   || (meta.Length > 0 && meta.Contains(low, StringComparison.Ordinal)) ? 3
                 : -1;
-            // the name itself with case and separators ignored is as exact as it gets: "orderline" is Order_Line
-            if (tier != 0 && folded.Length > 0 && (Fold(name) == folded || Fold(qual) == folded)) tier = 0;
-            if (tier < 0 && words.Length > 0)
-            {
-                // the words typed, whatever separates them in the name: "order line" finds OrderLine, order_line,
-                // order-lines.vue; the whole run of words first, then every word somewhere in the name, then the path
-                string fName = Fold(name) + "\n" + Fold(qual) + "\n" + Fold(routeName), fRest = Fold(path) + "\n" + Fold(id) + "\n" + Fold(meta);
-                tier = HasWord(fName, folded, words.Length > 1) ? 5
-                    : words.All(x => HasWord(fName, x, words.Length > 1)) ? 6
-                    : words.All(x => HasWord(fName + "\n" + fRest, x, words.Length > 1)) ? 7
-                    : -1;
-            }
             if (tier >= 0) hits.Add((n.Id, tier, Rank(n)));
         }
         return hits.OrderBy(h => h.Tier).ThenBy(h => h.Rank).ThenBy(h => h.Id.Length)
             .ThenBy(h => h.Id, StringComparer.Ordinal).Select(h => h.Id).ToList();
     }
-
-    /// <summary>Lower-case letters and digits only: "Order_Line", "order-line" and "OrderLine" all become "orderline".</summary>
-    private static string Fold(string s)
-    {
-        var sb = new System.Text.StringBuilder(s.Length);
-        foreach (char c in s)
-            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
-            else if (c == '\n') sb.Append(c);
-        return sb.ToString();
-    }
-
-    /// <summary>A typed word in a folded name; in a query of several words a plural also finds the singular ("order lines" finds
-    /// OrderLine).</summary>
-    private static bool HasWord(string folded, string word, bool plural) =>
-        word.Length > 0 && (folded.Contains(word, StringComparison.Ordinal) ||
-                            plural && word.Length > 3 && word[^1] == 's' && folded.Contains(word[..^1], StringComparison.Ordinal));
 
     /// <summary>
     /// <see cref="Search"/> as text: one line per match with its node id, at most <paramref name="limit"/>. An unknown

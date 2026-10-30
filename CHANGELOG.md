@@ -13,10 +13,6 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🔎 **`codegraph search <text>`** (`--kind`, `--repo`, `--limit`): find nodes by part of a name, path or id from
   the terminal, with their ids - as the MCP `search` tool does. `show` takes `--relation`, `--direction in|out|both`,
   `--limit` and `--ids`; `impact` and `db-usage` take `--ids`.
-- 🔤 `search` (CLI and MCP) understands words: when the text as typed matches nothing, its words are matched with
-  case and separators ignored, so "order line" finds `OrderLine`, `order_line` and `order-lines.vue` (and, with
-  several words, "order lines" finds them too). A name that equals the text apart from case and separators
-  (`orderline` for `Order_Line`) counts as an exact match.
 - 🧷 **Prepared ADO commands in VB6**: a module-level `X As [New] ADODB.Command` is a `command` node. The procedure
   named in `X.CommandText = "..."` (also inside `With X`) is executed by the command, the routine that sets it up
   `prepares` it (impact does not follow that), and every routine that runs it (`X.Execute`, `rs.Open X`) executes it
