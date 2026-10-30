@@ -106,6 +106,7 @@ What's coming next: [roadmap](docs/ROADMAP.md).
 
    ```powershell
    .\publish\codegraph.exe search order             # find things by part of a name, path or id (prints ids)
+   .\publish\codegraph.exe search "*order*line*"    # or by pattern: Order_Line, orderLineService, ...
    .\publish\codegraph.exe show Orders              # a table/project/file/routine and all its connections
    .\publish\codegraph.exe show Orders --relation writes --direction in --ids   # only who writes it, with ids
    .\publish\codegraph.exe impact Orders            # everything that depends on it, grouped by app

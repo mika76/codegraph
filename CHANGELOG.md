@@ -13,6 +13,8 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 - 🔎 **`codegraph search <text>`** (`--kind`, `--repo`, `--limit`): find nodes by part of a name, path or id from
   the terminal, with their ids - as the MCP `search` tool does. `show` takes `--relation`, `--direction in|out|both`,
   `--limit` and `--ids`; `impact` and `db-usage` take `--ids`.
+- ✳️ `search` (CLI and MCP) takes `*` patterns like `show`: `*order*line*` finds `Order_Line` and
+  `orderLineService`. A search of several words suggests the pattern, since code often joins the words.
 - 🧷 **Prepared ADO commands in VB6**: a module-level `X As [New] ADODB.Command` is a `command` node. The procedure
   named in `X.CommandText = "..."` (also inside `With X`) is executed by the command, the routine that sets it up
   `prepares` it (impact does not follow that), and every routine that runs it (`X.Execute`, `rs.Open X`) executes it

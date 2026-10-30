@@ -102,6 +102,22 @@ public class QueryTests
     }
 
     [Fact]
+    public void Search_takes_patterns_and_suggests_one_for_words()
+    {
+        var g = SampleGraph.Create();
+        g.Node("db:Order_Line", ("kind", "db_table"), ("name", "Order_Line"));
+        g.Node("sym:Shop:web/orderLineService.ts#orderLineService", ("kind", "module"), ("name", "orderLineService"));
+        // a pattern matches whole names (any case), names before paths and ids
+        Assert.Equal(["db:Order_Line", "sym:Shop:web/orderLineService.ts#orderLineService"], GraphQuery.Search(g, "*order*line*"));
+        Assert.Equal(["db:Order_Line"], GraphQuery.Search(g, "order*line"));
+        Assert.Equal([SampleGraph.FDb, SampleGraph.TMod, SampleGraph.Load], GraphQuery.Search(g, "*moddb*", repo: "Shop")); // Load by its id
+        // words typed apart match only as typed; the answer suggests the pattern
+        var w = new StringWriter { NewLine = "\n" };
+        Assert.Empty(GraphQuery.WriteSearch(g, "order line", w));
+        Assert.Equal("Nothing matches 'order line'.\nNames may join the words differently - try a pattern: '*order*line*'\n", w.ToString());
+    }
+
+    [Fact]
     public void Search_puts_exact_matches_first_and_filters_kind_and_repo()
     {
         var g = SampleGraph.Create();

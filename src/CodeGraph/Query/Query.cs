@@ -61,9 +61,7 @@ public static class GraphQuery
         List<string> hits;
         if (wildcard)
         {
-            var re = new System.Text.RegularExpressions.Regex("^" + System.Text.RegularExpressions.Regex.Escape(n).Replace(@"\*", ".*") + "$",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
-                | System.Text.RegularExpressions.RegexOptions.Singleline);
+            var re = Pattern(n);
             hits = g.Nodes.Where(x => Keys(x).Any(k => k.Length > 0 && re.IsMatch(k))).Select(x => x.Id).ToList();
         }
         else
@@ -87,6 +85,12 @@ public static class GraphQuery
                                                                || Low(x.Str("qual")).Contains(lowName, StringComparison.Ordinal))).ToList();
         return new(null, [], (byName.Count > 0 ? byName : near).Take(5).ToList());
     }
+
+    /// <summary>A name with '*' as a whole-name pattern (any case): '*Order*Line*' matches Order_Line and orderLines.</summary>
+    private static System.Text.RegularExpressions.Regex Pattern(string name) =>
+        new("^" + System.Text.RegularExpressions.Regex.Escape(name).Replace(@"\*", ".*") + "$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant
+            | System.Text.RegularExpressions.RegexOptions.Singleline);
 
     /// <summary>Why a name picked no node, with the candidates' labels and ids; null when it picked one.</summary>
     public static string? Problem(Graph g, string name, NameMatch m)
@@ -144,10 +148,20 @@ public static class GraphQuery
     public static List<string> Search(Graph g, string text, string? kind = null, string? repo = null)
     {
         string low = text.Trim().ToLowerInvariant();
+        // with '*' the text is a pattern, as names are in show / impact / path: names first, then paths and ids
+        var pattern = low.Contains('*') ? Pattern(low) : null;
         var hits = new List<(string Id, int Tier, int Rank)>();
         foreach (var n in g.Nodes)
         {
             if (!string.IsNullOrEmpty(kind) && !string.Equals(n.Kind, kind, StringComparison.OrdinalIgnoreCase)) continue;
+            if (pattern is not null)
+            {
+                if (!string.IsNullOrEmpty(repo) && !string.Equals(RepoOf(n), repo, StringComparison.OrdinalIgnoreCase)) continue;
+                bool Is(string? s) => !string.IsNullOrEmpty(s) && pattern.IsMatch(s);
+                int pt = Is(n.Str("name")) || Is(n.Str("qual")) || Is(n.Str("route_name")) ? 0 : Is(n.Str("path")) || Is(n.Id) ? 1 : -1;
+                if (pt >= 0) hits.Add((n.Id, pt, Rank(n)));
+                continue;
+            }
             if (!string.IsNullOrEmpty(repo) && !string.Equals(RepoOf(n), repo, StringComparison.OrdinalIgnoreCase)) continue;
             string name = Low(n.Str("name")), qual = Low(n.Str("qual")), path = Low(n.Str("path")), id = n.Id.ToLowerInvariant();
             // a route is also found by its route name and by its meta values (the permission that guards it)
@@ -180,14 +194,20 @@ public static class GraphQuery
             throw new CodeGraphException($"Unknown repo '{repo}'. Repositories: " +
                                          string.Join(", ", g.Nodes.Where(n => n.Kind == "repo").Select(n => n.Name)));
         var hits = Search(g, query, kind, repo);
+        // words typed apart are often written together, or with _ or - in between, in the code
+        var words = query.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        string? hint = !query.Contains('*') && words.Length > 1
+            ? $"Names may join the words differently - try a pattern: '*{string.Join("*", words)}*'" : null;
         if (hits.Count == 0)
         {
             w.WriteLine($"Nothing matches '{query}'.");
+            if (hint is not null) w.WriteLine(hint);
             return hits;
         }
         w.WriteLine($"{hits.Count} match{(hits.Count == 1 ? "" : "es")} for '{query}':");
         foreach (var h in hits.Take(limit)) w.WriteLine($"  {Label(g, h)}  {{{h}}}");
         if (hits.Count > limit) w.WriteLine($"  ... {hits.Count - limit} more (narrow with kind or repo, or raise the limit)");
+        if (hint is not null) w.WriteLine(hint);
         return hits;
     }
 
