@@ -154,7 +154,8 @@ public sealed class McpServer(string graphPath, string reportPath, string? exePa
             "labels with node ids. Use it first when you don't know the exact name.",
             new JsonObject
             {
-                ["query"] = Str("Text to look for, e.g. a table, routine, file, project or route name."),
+                ["query"] = Str("Text to look for, e.g. a table, routine, file, project or route name. Words may be " +
+                                "typed apart: \"order line\" also finds OrderLine, order_line and order-lines.vue."),
                 ["kind"] = Str("Only this node kind, e.g. project, file, class, method, sub, function, form, " +
                                "db_table, db_proc, db_view, column, route, installer, release, or a kind from your own file " +
                                "formats (e.g. report). An unknown kind lists the kinds in the graph."),
