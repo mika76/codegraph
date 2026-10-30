@@ -9,6 +9,12 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-30
+
+🎯 Fixes from real-world use: VB6 prepared commands reach their real callers, impact follows knowledge facts, a
+tidier `db_usage`, and `search` and `show` filters on the command line. The parsers changed, so the first build
+after upgrading reads every file again.
+
 ### ✨ Added
 - 🔎 **`codegraph search <text>`** (`--kind`, `--repo`, `--limit`): find nodes by part of a name, path or id from
   the terminal, with their ids - as the MCP `search` tool does. `show` takes `--relation`, `--direction in|out|both`,
@@ -287,7 +293,8 @@ and knowledge that agents record and review.
 - 📦 **Native executables** for Windows, Linux and macOS (x64 and ARM64) on every release; CI runs the tests on all
   three systems.
 
-[Unreleased]: https://github.com/mika76/codegraph/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/mika76/codegraph/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/mika76/codegraph/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mika76/codegraph/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mika76/codegraph/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mika76/codegraph/compare/v0.1.0...v0.2.0
