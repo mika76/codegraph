@@ -738,7 +738,7 @@ public static partial class Obsidian
                 string tp = string.Join(" / ", new[] { N(p).Str("ptype"), N(p).Str("lang") }.Where(x => !string.IsNullOrEmpty(x)));
                 return $"- {Link(p)}" + (tp.Length > 0 ? $" ({tp})" : "");
             }).ToList();
-            var slns = Kids("solution").Select(s => $"- {Link(s)}").ToList();
+            var slns = Kids("solution").OrderBy(s => S(N(s), "path").ToLowerInvariant(), Ord).Select(s => $"- {Link(s, First(N(s).Str("path"), N(s).Name))}").ToList();
             string branch = S(n, "branch");
             string? version = branch.Length > 0 ? CodeGraph.Knowledge.KnowledgeLoader.BranchVersion(branch) : null;
             var det = new List<string>

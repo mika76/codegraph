@@ -177,6 +177,8 @@ public sealed class ObsidianTests : IDisposable
         g.AddEdge("repo:Billing", "area:Billing:Invoices", "contains");
         g.AddEdge("repo:Billing", "proj:Billing:Invoices/Invoices.csproj", "contains");
         g.AddEdge("repo:Billing", "sln:Billing:Billing.sln", "contains");
+        g.Node("sln:Billing:api/Billing.sln", ("kind", "solution"), ("name", "Billing.sln"), ("repo", "Billing"), ("path", "api/Billing.sln"));
+        g.AddEdge("repo:Billing", "sln:Billing:api/Billing.sln", "contains");
         g.Node("concept:old", ("kind", "concept"), ("name", "Old invoicing screen"));
         g.AddEdge("repo:Billing", "concept:old", "replaces", attrs: [("custom", System.Text.Json.Nodes.JsonValue.Create(true))]);
 
@@ -186,7 +188,7 @@ public sealed class ObsidianTests : IDisposable
         Assert.Contains("- Branch: `R2.4.0`", page);
         Assert.Contains("- Release: [[Releases/2.4.0|2.4.0]]", page);
         Assert.Contains("## Areas\n\n- [[Areas/Billing/Invoices|Invoices]] - 0 files", page);
-        Assert.Contains("## Solutions\n\n- [[Solutions/Billing/Billing.sln|Billing.sln]]", page);
+        Assert.Contains("## Solutions\n\n- [[Solutions/Billing/api/Billing.sln|api/Billing.sln]]\n- [[Solutions/Billing/Billing.sln|Billing.sln]]\n", page);
         Assert.Contains("## Projects\n\n- [[Projects/Invoices|Invoices]] (library / csharp)", page);
         Assert.Contains("- **replaces** -> [[Concepts/Old invoicing screen|Old invoicing screen]]", page);
         Assert.Contains("## Notes\n\nAn optional module, sold separately.", page);
