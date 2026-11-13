@@ -9,6 +9,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+### ✨ Added
+- 🗂️ **Repository pages in the vault**: every repository gets a note under `Repos/` with its path, branch, release,
+  areas, solutions, projects, knowledge notes and facts. Links to a repository (from `Home`, areas, solutions and
+  concept relations) now open that page instead of `Home`.
+
 ## [0.5.0] - 2026-10-30
 
 🎯 Fixes from real-world use: VB6 prepared commands reach their real callers, impact follows knowledge facts, a

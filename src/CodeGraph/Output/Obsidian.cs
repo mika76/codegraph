@@ -32,7 +32,7 @@ public static partial class Obsidian
 
     public static readonly Dictionary<string, string> Tags = new()
     {
-        ["project"] = "project", ["file"] = "file", ["area"] = "area", ["solution"] = "solution", ["library"] = "library",
+        ["repo"] = "repo", ["project"] = "project", ["file"] = "file", ["area"] = "area", ["solution"] = "solution", ["library"] = "library",
         ["release"] = "release", ["concept"] = "concept", ["db_table"] = "table", ["db_view"] = "view", ["db_proc"] = "proc",
         ["db_function"] = "function", ["db_trigger"] = "trigger", ["db_type"] = "type", ["db_synonym"] = "synonym",
     };
@@ -41,7 +41,7 @@ public static partial class Obsidian
     [
         ("project", "E67E22"), ("file", "3498DB"), ("table", "2ECC71"), ("proc", "9B59B6"),
         ("function", "F1C40F"), ("view", "1ABC9C"), ("release", "E74C3C"), ("library", "95A5A6"),
-        ("concept", "E91E63"),
+        ("concept", "E91E63"), ("repo", "34495E"),
     ];
 
     private static readonly HashSet<string> Reserved =
@@ -50,7 +50,7 @@ public static partial class Obsidian
     public const string Manifest = ".codegraph-manifest.json";
 
     public const string HomeText = "## Adding your own notes\n\nPut your own notes anywhere outside the generated folders " +
-        "(`Projects`, `Areas`, `Code`, `Database`, `Libraries`, `Releases`, `Concepts`, `Solutions`, `Items`) - or in a " +
+        "(`Repos`, `Projects`, `Areas`, `Code`, `Database`, `Libraries`, `Releases`, `Concepts`, `Solutions`, `Items`) - or in a " +
         "`Notes/` folder. They are never touched when the vault is regenerated. Link to generated notes by " +
         "name, e.g. `[[frmMain.frm]]` or `[[Orders]]`.";
 
@@ -194,6 +194,7 @@ public static partial class Obsidian
             string name = First(n.Str("name"), n.Id)!;
             return k switch
             {
+                "repo" => ["Repos", name],
                 "project" => ["Projects", name],
                 "area" => ["Areas", S(n, "repo"), name],
                 "file" => ["Code", S(n, "repo"), .. S(n, "path").Split('/')],
@@ -239,8 +240,6 @@ public static partial class Obsidian
                 label = First(label, n.Str("qual"), n.Str("name"));
                 nid = _v.FileOf.GetValueOrDefault(nid, nid);
             }
-            else if (n.Kind == "repo")
-                return $"[[{_prefix}Home|{LabelOf(First(label, n.Str("name")))}]]";
             label = First(label, _g.GetNode(nid)?.Str("name"), nid);
             return _paths.TryGetValue(nid, out var p) ? $"[[{_prefix}{p}|{LabelOf(label)}]]" : LabelOf(label);
         }
@@ -725,6 +724,36 @@ public static partial class Obsidian
                 [("Projects", Sorted(ps))]);
         }
 
+        private string Repo(string nid, Node n)
+        {
+            string name = n.Name;
+            var files = _g.Nodes.Where(f => f.Kind == "file" && f.Str("repo") == name).ToList();
+            int loc = files.Sum(f => f.Int("loc") ?? 0);
+            var contained = _v.OutOf(nid).Where(e => e.Relation == "contains").Select(e => N(e.Target)).ToList();
+            List<string> Kids(string kind) => contained.Where(c => c.Kind == kind)
+                .OrderBy(c => c.Name.ToLowerInvariant(), Ord).ThenBy(c => c.Id, Ord).Select(c => c.Id).ToList();
+            var areas = Kids("area").Select(a => $"- {Link(a)} - {_areaFiles.GetValueOrDefault(a, []).Count} files").ToList();
+            var projs = Kids("project").Select(p =>
+            {
+                string tp = string.Join(" / ", new[] { N(p).Str("ptype"), N(p).Str("lang") }.Where(x => !string.IsNullOrEmpty(x)));
+                return $"- {Link(p)}" + (tp.Length > 0 ? $" ({tp})" : "");
+            }).ToList();
+            var slns = Kids("solution").Select(s => $"- {Link(s)}").ToList();
+            string branch = S(n, "branch");
+            string? version = branch.Length > 0 ? CodeGraph.Knowledge.KnowledgeLoader.BranchVersion(branch) : null;
+            var det = new List<string>
+            {
+                !string.IsNullOrEmpty(n.Str("path")) ? $"- Path: `{n.Str("path")}`" : "",
+                branch.Length > 0 ? $"- Branch: `{branch}`" : "",
+                !string.IsNullOrEmpty(n.Str("commit")) ? $"- Commit: `{n.Str("commit")}`" : "",
+                version is not null && _g.HasNode($"rel:{version}") ? $"- Release: {Link($"rel:{version}")}" : "",
+            };
+            return Note(n, name,
+                $"Repository with {files.Count} files, {projs.Count} project(s), {Fmt(loc)} lines of code.",
+                [("Details", det.Where(d => d.Length > 0).ToList()), ("Areas", areas), ("Solutions", slns), ("Projects", projs)],
+                new Extra().Set("branch", n.Data["branch"]));
+        }
+
         private string Concept(string nid, Node n) => Note(n, n.Name, "Concept (from knowledge files).", []);
 
         /// <summary>"report" -> "Reports", "parameter_set" -> "Parameter sets".</summary>
@@ -796,7 +825,7 @@ public static partial class Obsidian
             {
                 var rn = N(r);
                 int nf = nodes.Count(n => n.Kind == "file" && n.Str("repo") == rn.Name);
-                repos.Add($"- **{rn.Name}** - {nf} files" + (!string.IsNullOrEmpty(rn.Str("path")) ? $" (`{rn.Str("path")}`)" : ""));
+                repos.Add($"- {Link(r)} - {nf} files" + (!string.IsNullOrEmpty(rn.Str("path")) ? $" (`{rn.Str("path")}`)" : ""));
             }
             var areas = new List<string>();
             foreach (var r in repoIds)
@@ -853,6 +882,7 @@ public static partial class Obsidian
                 var n = N(nid);
                 string? text = n.Kind switch
                 {
+                    "repo" => Repo(nid, n),
                     "project" => Project(nid, n),
                     "file" => File(nid, n),
                     "area" => Area(nid, n),

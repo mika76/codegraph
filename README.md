@@ -234,10 +234,10 @@ proposes keep / fix / remove for you to approve. Run it after big refactors or e
 normal Obsidian links. The build never touches them.
 
 - Generated (don't edit, rewritten on every build): the folders `Areas`, `Code`, `Database`, `Libraries`,
-  `Projects`, `Releases`, `Solutions` and the notes `Home` and `Codegraph Report`. A build only rewrites or deletes
-  notes listed in `.codegraph-manifest.json`.
-- Note names: projects by name (`[[Order Entry]]`), DB objects by name (`[[Orders]]`, `[[sp_Get_Customer]]`), code
-  files by file name (`[[modUtils.bas]]`). When a file name repeats, link with its path:
+  `Projects`, `Releases`, `Repos`, `Solutions` and the notes `Home` and `Codegraph Report`. A build only rewrites or
+  deletes notes listed in `.codegraph-manifest.json`.
+- Note names: repositories and projects by name (`[[Billing]]`, `[[Order Entry]]`), DB objects by name
+  (`[[Orders]]`, `[[sp_Get_Customer]]`), code files by file name (`[[modUtils.bas]]`). When a file name repeats, link with its path:
   `[[Code/Shop/ORDER ENTRY/frmMain.frm|Order Entry main form]]`. Typing `[[` in Obsidian autocompletes.
 - Routines have no note of their own; they're listed in their file's note, so link the file and name the routine.
 - Your links show up as **Backlinks** on the generated notes and in the graph view. Example `Notes/Order lifecycle.md`:

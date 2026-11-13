@@ -46,7 +46,7 @@ public sealed class ObsidianTests : IDisposable
         Assert.Contains("[[Code/Shop/Sales/frmMain.frm|frmMain.frm]] - 100 LOC", proj);
         Assert.Contains("> [!warning] 1 listed member file(s) were not found on disk:", proj);
         Assert.Contains(@"| [[Database/Tables/Orders\|Orders]] | table | 2 |", proj);
-        Assert.Contains("[[Home|Shop]]", proj);
+        Assert.Contains("[[Repos/Shop|Shop]]", proj);
 
         var table = File.ReadAllText(Path.Combine(_dir, "Database", "Tables", "Orders.md"));
         Assert.Contains("| Id | int not null |", table);
@@ -66,7 +66,8 @@ public sealed class ObsidianTests : IDisposable
 
         var home = File.ReadAllText(Path.Combine(_dir, "Home.md"));
         Assert.Contains("# Codebase map", home);
-        Assert.Contains("- **Shop** - 3 files (`C:/x/Shop`)", home);
+        Assert.Contains("- [[Repos/Shop|Shop]] - 3 files (`C:/x/Shop`)", home);
+        Assert.True(File.Exists(Path.Combine(_dir, "Repos", "Shop.md")));
         Assert.Contains("Most used tables (by distinct files):", home);
         Assert.EndsWith("`[[Orders]]`.\n", home);
 
@@ -160,6 +161,61 @@ public sealed class ObsidianTests : IDisposable
         g.Node("db:orders2", ("kind", "db_table"), ("name", "orders"));
         notes = Obsidian.Render(g, Cfg());
         Assert.Contains("Database/Tables/orders (2).md", notes.Keys);
+    }
+
+    [Fact]
+    public void Repos_get_their_own_page_with_notes_facts_and_contents()
+    {
+        var g = SampleGraph.Create();
+        g.Node("repo:Billing", ("kind", "repo"), ("name", "Billing"), ("path", "C:/x/Billing"), ("branch", "R2.4.0"),
+            ("knowledge_notes", new System.Text.Json.Nodes.JsonArray("An optional module, sold separately.")));
+        g.Node("rel:2.4.0", ("kind", "release"), ("name", "2.4.0"));
+        g.Node("area:Billing:Invoices", ("kind", "area"), ("name", "Invoices"), ("repo", "Billing"));
+        g.Node("proj:Billing:Invoices/Invoices.csproj", ("kind", "project"), ("name", "Invoices"), ("repo", "Billing"),
+            ("area", "Invoices"), ("ptype", "library"), ("lang", "csharp"));
+        g.Node("sln:Billing:Billing.sln", ("kind", "solution"), ("name", "Billing.sln"), ("repo", "Billing"), ("path", "Billing.sln"));
+        g.AddEdge("repo:Billing", "area:Billing:Invoices", "contains");
+        g.AddEdge("repo:Billing", "proj:Billing:Invoices/Invoices.csproj", "contains");
+        g.AddEdge("repo:Billing", "sln:Billing:Billing.sln", "contains");
+        g.Node("concept:old", ("kind", "concept"), ("name", "Old invoicing screen"));
+        g.AddEdge("repo:Billing", "concept:old", "replaces", attrs: [("custom", System.Text.Json.Nodes.JsonValue.Create(true))]);
+
+        var notes = Obsidian.Render(g, Cfg());
+        var page = notes["Repos/Billing.md"];
+        Assert.StartsWith("---\ntype: \"repo\"\npath: \"C:/x/Billing\"\nbranch: \"R2.4.0\"\ntags: [codegraph/repo]\n---\n\n# Billing\n", page);
+        Assert.Contains("- Branch: `R2.4.0`", page);
+        Assert.Contains("- Release: [[Releases/2.4.0|2.4.0]]", page);
+        Assert.Contains("## Areas\n\n- [[Areas/Billing/Invoices|Invoices]] - 0 files", page);
+        Assert.Contains("## Solutions\n\n- [[Solutions/Billing/Billing.sln|Billing.sln]]", page);
+        Assert.Contains("## Projects\n\n- [[Projects/Invoices|Invoices]] (library / csharp)", page);
+        Assert.Contains("- **replaces** -> [[Concepts/Old invoicing screen|Old invoicing screen]]", page);
+        Assert.Contains("## Notes\n\nAn optional module, sold separately.", page);
+
+        // links to a repo anywhere point at its page, never at Home
+        Assert.Contains("- [[Repos/Billing|Billing]] **replaces** -> this", notes["Concepts/Old invoicing screen.md"]);
+        Assert.Contains("Top-level folder of [[Repos/Billing|Billing]]", notes["Areas/Billing/Invoices.md"]);
+        Assert.Contains("Solution in [[Repos/Billing|Billing]]", notes["Solutions/Billing/Billing.sln.md"]);
+        Assert.Contains("- [[Repos/Billing|Billing]] - 0 files (`C:/x/Billing`)", notes["Home.md"]);
+        Assert.DoesNotContain("[[Home|", string.Concat(notes.Values));
+    }
+
+    [Fact]
+    public void A_new_repo_page_is_tracked_by_the_manifest_and_removed_with_its_repo()
+    {
+        var g = SampleGraph.Create();
+        Obsidian.WriteVault(g, Cfg(), null);
+        Assert.True(File.Exists(Path.Combine(_dir, "Repos", "Shop.md")));
+        Assert.Contains("\"Repos/Shop.md\"", File.ReadAllText(Path.Combine(_dir, ".codegraph-manifest.json")));
+        File.WriteAllText(Path.Combine(_dir, "Repos", "my repo notes.md"), "keep");
+
+        g.Node("repo:Billing", ("kind", "repo"), ("name", "Billing"));
+        var r = Obsidian.WriteVault(g, Cfg(), null);
+        Assert.Equal(2, r.Written); // the new repo page and Home
+        g.RemoveNode("repo:Billing");
+        r = Obsidian.WriteVault(g, Cfg(), null);
+        Assert.Equal(1, r.Deleted);
+        Assert.False(File.Exists(Path.Combine(_dir, "Repos", "Billing.md")));
+        Assert.Equal("keep", File.ReadAllText(Path.Combine(_dir, "Repos", "my repo notes.md")));
     }
 
     [Fact]
