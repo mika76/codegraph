@@ -9,6 +9,11 @@ Sections: ✨ Added · 🔄 Changed · ⚠️ Deprecated · 🗑️ Removed · �
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-13
+
+🗂️ Repositories get their own vault pages, so notes and facts about a repository are finally visible in Obsidian.
+No parser changes: the first build after upgrading uses the cache.
+
 ### ✨ Added
 - 🗂️ **Repository pages in the vault**: every repository gets a note under `Repos/` with its path, branch, release,
   areas, solutions, projects, knowledge notes and facts. Links to a repository (from `Home`, areas, solutions and
@@ -298,7 +303,8 @@ and knowledge that agents record and review.
 - 📦 **Native executables** for Windows, Linux and macOS (x64 and ARM64) on every release; CI runs the tests on all
   three systems.
 
-[Unreleased]: https://github.com/mika76/codegraph/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/mika76/codegraph/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/mika76/codegraph/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/mika76/codegraph/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/mika76/codegraph/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mika76/codegraph/compare/v0.2.0...v0.3.0
